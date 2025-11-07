@@ -1,0 +1,31 @@
+{
+  "title": "Frontend-Backend Integration Test",
+  "authors": [
+    {
+      "name": "Test Author",
+      "department": "Computer Science", 
+      "organization": "Test University",
+      "city": "Test City",
+      "state": "Test State"
+    }
+  ],
+  "abstract": "This document tests the integration between the Format-A frontend and the Python backend with extensive XML manipulation for word spacing control.",
+  "keywords": "frontend, backend, integration, IEEE format, XML manipulation",
+  "sections": [
+    {
+      "title": "Integration Test",
+      "contentBlocks": [
+        {
+          "type": "text",
+          "content": "This section verifies that the backend can generate IEEE-formatted documents with the enhanced XML justification controls.",
+          "order": 1
+        }
+      ]
+    }
+  ],
+  "references": [
+    {
+      "text": "Test Reference. Sample reference for testing the backend integration."
+    }
+  ]
+}
