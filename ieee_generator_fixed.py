@@ -35,11 +35,11 @@ def sanitize_text(text):
     
     return text
 
-# IEEE formatting configuration - EXACT same as test.py
+# IEEE formatting configuration - IEEE standard font sizes
 IEEE_CONFIG = {
     'font_name': 'Times New Roman',
     'font_size_title': Pt(24),
-    'font_size_body': Pt(9.5),
+    'font_size_body': Pt(10),  # IEEE standard: 10pt body text
     'font_size_caption': Pt(9),
     'margin_left': Inches(0.75),
     'margin_right': Inches(0.75),
@@ -77,27 +77,27 @@ def set_document_defaults(doc):
         normal.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
         normal.paragraph_format.first_line_indent = Pt(0)
 
-    # Modify Heading 1 style - LIKE ABSTRACT TITLE (regular weight, not bold)
+    # Modify Heading 1 style - IEEE SECTION HEADINGS (BOLD, CENTERED)
     if 'Heading 1' in styles:
         heading1 = styles['Heading 1']
         heading1.base_style = styles['Normal']
-        heading1.paragraph_format.space_before = Pt(0)
-        heading1.paragraph_format.space_after = Pt(0)
+        heading1.paragraph_format.space_before = Pt(12)
+        heading1.paragraph_format.space_after = Pt(6)
         heading1.paragraph_format.line_spacing = Pt(10)
         heading1.paragraph_format.line_spacing_rule = 0
         heading1.paragraph_format.keep_with_next = False
         heading1.paragraph_format.page_break_before = False
-        heading1.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.LEFT
+        heading1.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.CENTER
         heading1.font.name = IEEE_CONFIG['font_name']
         heading1.font.size = IEEE_CONFIG['font_size_body']
-        heading1.font.bold = False  # CHANGED: Like abstract title - NOT bold
+        heading1.font.bold = True  # IEEE standard: Section headings are BOLD
 
-    # Modify Heading 2 style for subsections - LIKE ABSTRACT TITLE (regular weight, not bold)
+    # Modify Heading 2 style for subsections - IEEE SUBSECTION HEADINGS (BOLD, LEFT)
     if 'Heading 2' in styles:
         heading2 = styles['Heading 2']
         heading2.base_style = styles['Normal']
         heading2.paragraph_format.space_before = Pt(6)
-        heading2.paragraph_format.space_after = Pt(0)
+        heading2.paragraph_format.space_after = Pt(3)
         heading2.paragraph_format.line_spacing = Pt(10)
         heading2.paragraph_format.line_spacing_rule = 0
         heading2.paragraph_format.keep_with_next = False
@@ -105,7 +105,7 @@ def set_document_defaults(doc):
         heading2.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.LEFT
         heading2.font.name = IEEE_CONFIG['font_name']
         heading2.font.size = IEEE_CONFIG['font_size_body']
-        heading2.font.bold = False  # CHANGED: Like abstract title - NOT bold
+        heading2.font.bold = True  # IEEE standard: Subsection headings are BOLD
 
 def add_title(doc, title):
     """Add the paper title - EXACT same as test.py."""
@@ -119,21 +119,41 @@ def add_title(doc, title):
     para.paragraph_format.space_after = Pt(12)
 
 def add_authors(doc, authors):
-    """Add authors and their details in a parallel layout using a table - EXACT same as test.py."""
+    """Add authors with proper IEEE formatting and spacing."""
     if not authors:
         return
     
     num_authors = len(authors)
+    if num_authors == 0:
+        return
+    
+    # Create table with proper spacing for multiple authors
     table = doc.add_table(rows=1, cols=num_authors)
     table.alignment = WD_ALIGN_PARAGRAPH.CENTER
     table.allow_autofit = True
     
+    # Set consistent column widths for better spacing
     for idx, author in enumerate(authors):
         if not author.get('name'):
             continue
+            
         cell = table.cell(0, idx)
         cell.vertical_alignment = WD_ALIGN_VERTICAL.TOP
         
+        # Add proper cell margins for spacing
+        cell_element = cell._element
+        cell_properties = cell_element.get_or_add_tcPr()
+        margins = OxmlElement('w:tcMar')
+        
+        # Set cell margins (IEEE spacing between authors)
+        for side in ['left', 'right', 'top', 'bottom']:
+            margin = OxmlElement(f'w:{side}')
+            margin.set(qn('w:w'), '100')  # 100 twips = better spacing
+            margin.set(qn('w:type'), 'dxa')
+            margins.append(margin)
+        cell_properties.append(margins)
+        
+        # Author name - bold, centered
         para = cell.add_paragraph()
         run = para.add_run(author['name'])
         run.bold = True
@@ -141,8 +161,9 @@ def add_authors(doc, authors):
         run.font.size = IEEE_CONFIG['font_size_body']
         para.alignment = WD_ALIGN_PARAGRAPH.CENTER
         para.paragraph_format.space_before = Pt(0)
-        para.paragraph_format.space_after = Pt(2)
+        para.paragraph_format.space_after = Pt(3)  # Consistent spacing
         
+        # Author details - italic, centered, with proper spacing
         fields = [
             ('department', 'Department'),
             ('organization', 'Organization'),
@@ -150,45 +171,51 @@ def add_authors(doc, authors):
             ('state', 'State'),
             ('tamilnadu', 'Tamil Nadu')
         ]
+        
         for field_key, field_name in fields:
             if author.get(field_key):
                 para = cell.add_paragraph(sanitize_text(author[field_key]))
                 para.alignment = WD_ALIGN_PARAGRAPH.CENTER
                 para.paragraph_format.space_before = Pt(0)
-                para.paragraph_format.space_after = Pt(2)
+                para.paragraph_format.space_after = Pt(1)  # Tight spacing between details
                 if para.runs:
                     para.runs[0].italic = True
                     para.runs[0].font.name = IEEE_CONFIG['font_name']
                     para.runs[0].font.size = IEEE_CONFIG['font_size_body']
         
+        # Custom fields with consistent formatting
         for custom_field in author.get('custom_fields', []):
             if custom_field['value']:
                 para = cell.add_paragraph(sanitize_text(custom_field['value']))
                 para.alignment = WD_ALIGN_PARAGRAPH.CENTER
                 para.paragraph_format.space_before = Pt(0)
-                para.paragraph_format.space_after = Pt(2)
+                para.paragraph_format.space_after = Pt(1)
                 if para.runs:
                     para.runs[0].italic = True
                     para.runs[0].font.name = IEEE_CONFIG['font_name']
                     para.runs[0].font.size = IEEE_CONFIG['font_size_body']
     
-    doc.add_paragraph().paragraph_format.space_after = Pt(12)
+    # Add proper spacing after authors section
+    spacing_para = doc.add_paragraph()
+    spacing_para.paragraph_format.space_after = Pt(18)  # IEEE standard spacing
 
 def add_abstract(doc, abstract):
-    """Add the abstract section with bold title followed by content."""
+    """Add the abstract section with italic title followed by content."""
     if abstract:
-        # Add abstract with bold title and content in same paragraph
+        # Add abstract with italic title and content in same paragraph
         para = doc.add_paragraph()
         
-        # Bold "Abstract—" title (only bold, not italic)
+        # Italic "Abstract—" title (IEEE standard format)
         title_run = para.add_run("Abstract—")
-        title_run.bold = True
+        title_run.italic = True
+        title_run.bold = False
         title_run.font.name = IEEE_CONFIG['font_name']
         title_run.font.size = IEEE_CONFIG['font_size_body']
         
-        # Add abstract content immediately after (bold text)
+        # Add abstract content immediately after (normal weight)
         content_run = para.add_run(sanitize_text(abstract))
-        content_run.bold = True
+        content_run.bold = False
+        content_run.italic = False
         content_run.font.name = IEEE_CONFIG['font_name']
         content_run.font.size = IEEE_CONFIG['font_size_body']
         
@@ -221,20 +248,22 @@ def add_abstract(doc, abstract):
         pPr.append(adjust_right_ind)
 
 def add_keywords(doc, keywords):
-    """Add the keywords section with bold title followed by content."""
+    """Add the keywords section with italic title followed by content."""
     if keywords:
-        # Add keywords with bold title and content in same paragraph
+        # Add keywords with italic title and content in same paragraph
         para = doc.add_paragraph()
         
-        # Bold "Keywords—" title (only bold, not italic)
+        # Italic "Keywords—" title (IEEE standard format)
         title_run = para.add_run("Keywords—")
-        title_run.bold = True
+        title_run.italic = True
+        title_run.bold = False
         title_run.font.name = IEEE_CONFIG['font_name']
         title_run.font.size = IEEE_CONFIG['font_size_body']
         
-        # Add keywords content immediately after (bold text)
+        # Add keywords content immediately after (normal weight)
         content_run = para.add_run(sanitize_text(keywords))
-        content_run.bold = True
+        content_run.bold = False
+        content_run.italic = False
         content_run.font.name = IEEE_CONFIG['font_name']
         content_run.font.size = IEEE_CONFIG['font_size_body']
         
@@ -553,7 +582,15 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
             # Process content blocks if they exist
             if child_sub.get('contentBlocks'):
                 for block in child_sub['contentBlocks']:
-                    process_content_block(doc, block)
+                    if block.get('type') == 'text' and block.get('content'):
+                        add_formatted_paragraph(
+                            doc, 
+                            block['content'],
+                            indent_left=IEEE_CONFIG['column_indent'] + Inches(0.1 * (level - 1)),
+                            indent_right=IEEE_CONFIG['column_indent'],
+                            space_before=Pt(1),
+                            space_after=Pt(12)
+                        )
             
             # Recursively handle even deeper nesting
             if level < 5:  # Limit depth to prevent excessive nesting
@@ -786,30 +823,32 @@ def set_compatibility_options(doc):
     compat.append(option10)
 
 def generate_ieee_document(form_data):
-    """Generate an IEEE-formatted Word document."""
+    """Generate an IEEE-formatted Word document with proper layout."""
     doc = Document()
     
     set_document_defaults(doc)
     
+    # Configure first section for single-column title and authors
     section = doc.sections[0]
     section.left_margin = IEEE_CONFIG['margin_left']
     section.right_margin = IEEE_CONFIG['margin_right']
     section.top_margin = IEEE_CONFIG['margin_top']
     section.bottom_margin = IEEE_CONFIG['margin_bottom']
     
+    # Add title and authors in single-column layout (IEEE standard)
     add_title(doc, form_data.get('title', ''))
     add_authors(doc, form_data.get('authors', []))
 
-    # Add continuous section break for two-column layout
-    section = doc.add_section(WD_SECTION.CONTINUOUS)
-    section.start_type = WD_SECTION.CONTINUOUS
-    section.left_margin = IEEE_CONFIG['margin_left']
-    section.right_margin = IEEE_CONFIG['margin_right']
-    section.top_margin = IEEE_CONFIG['margin_top']
-    section.bottom_margin = IEEE_CONFIG['margin_bottom']
+    # Add section break for two-column layout (for body content)
+    new_section = doc.add_section(WD_SECTION.CONTINUOUS)
+    new_section.start_type = WD_SECTION.CONTINUOUS
+    new_section.left_margin = IEEE_CONFIG['margin_left']
+    new_section.right_margin = IEEE_CONFIG['margin_right']
+    new_section.top_margin = IEEE_CONFIG['margin_top']
+    new_section.bottom_margin = IEEE_CONFIG['margin_bottom']
     
-    # Set up the two-column layout FIRST before adding content
-    sectPr = section._sectPr
+    # Configure two-column layout for body content
+    sectPr = new_section._sectPr
     cols = sectPr.xpath('./w:cols')
     if cols:
         cols = cols[0]
@@ -819,13 +858,13 @@ def generate_ieee_document(form_data):
     
     cols.set(qn('w:num'), str(IEEE_CONFIG['column_count_body']))
     cols.set(qn('w:sep'), '0')
-    cols.set(qn('w:space'), str(int(IEEE_CONFIG['column_spacing'].pt)))
+    cols.set(qn('w:space'), str(int(IEEE_CONFIG['column_spacing'].pt * 20)))  # Convert to twips
     cols.set(qn('w:equalWidth'), '1')
     
-    # Add column definitions
+    # Add column definitions with proper width
     for i in range(IEEE_CONFIG['column_count_body']):
         col = OxmlElement('w:col')
-        col.set(qn('w:w'), str(int(IEEE_CONFIG['column_width'].pt)))
+        col.set(qn('w:w'), str(int(IEEE_CONFIG['column_width'].pt * 20)))  # Convert to twips
         cols.append(col)
     
     # Prevent column balancing for stable layout
