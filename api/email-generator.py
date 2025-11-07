@@ -1,0 +1,220 @@
+"""
+Email Generator endpoint for Python backend
+Generates and sends IEEE-formatted documents via email
+"""
+
+import json
+import sys
+import os
+import base64
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.mime.application import MIMEApplication
+from io import BytesIO
+from http.server import BaseHTTPRequestHandler
+
+# Import the generate function from the local IEEE generator
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.join(current_dir, '..')
+sys.path.insert(0, parent_dir)
+
+try:
+    from ieee_generator_fixed import generate_ieee_document
+except ImportError as e:
+    print(f"Import error: {e}", file=sys.stderr)
+    def generate_ieee_document(data):
+        raise Exception(f"IEEE generator not available: {e}")
+
+class handler(BaseHTTPRequestHandler):
+    def do_OPTIONS(self):
+        """Handle CORS preflight requests"""
+        self.send_response(200)
+        self.send_header('Access-Control-Allow-Origin', 'https://format-a.vercel.app')
+        self.send_header('Access-Control-Allow-Methods', 'POST, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+        self.send_header('Access-Control-Allow-Credentials', 'true')
+        self.end_headers()
+
+    def do_POST(self):
+        """Handle POST requests for email generation and sending"""
+        try:
+            # Set CORS headers first
+            self.send_response(200)
+            self.send_header('Access-Control-Allow-Origin', 'https://format-a.vercel.app')
+            self.send_header('Access-Control-Allow-Methods', 'POST, OPTIONS')
+            self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+            self.send_header('Access-Control-Allow-Credentials', 'true')
+            self.send_header('Content-Type', 'application/json')
+            
+            # Read request body
+            content_length = int(self.headers.get('Content-Length', 0))
+            if content_length == 0:
+                self.end_headers()
+                error_response = json.dumps({
+                    'success': False,
+                    'error': 'Empty request body',
+                    'message': 'Email data is required'
+                })
+                self.wfile.write(error_response.encode())
+                return
+                
+            post_data = self.rfile.read(content_length)
+            email_data = json.loads(post_data.decode('utf-8'))
+            
+            # Extract email and document data
+            recipient_email = email_data.get('email')
+            document_data = email_data.get('documentData')
+            
+            # Validate required fields
+            if not recipient_email:
+                self.end_headers()
+                error_response = json.dumps({
+                    'success': False,
+                    'error': 'Missing email address',
+                    'message': 'Recipient email address is required'
+                })
+                self.wfile.write(error_response.encode())
+                return
+            
+            if not document_data:
+                self.end_headers()
+                error_response = json.dumps({
+                    'success': False,
+                    'error': 'Missing document data',
+                    'message': 'Document data is required for email generation'
+                })
+                self.wfile.write(error_response.encode())
+                return
+            
+            if not document_data.get('title'):
+                self.end_headers()
+                error_response = json.dumps({
+                    'success': False,
+                    'error': 'Missing document title',
+                    'message': 'Document title is required'
+                })
+                self.wfile.write(error_response.encode())
+                return
+            
+            # Generate the document
+            print(f"Generating document for email to {recipient_email}...", file=sys.stderr)
+            docx_buffer = generate_ieee_document(document_data)
+            
+            if not docx_buffer or docx_buffer.getvalue() == b'':
+                raise Exception("Generated document is empty")
+            
+            # Send email
+            email_result = self._send_email(
+                recipient_email=recipient_email,
+                document_title=document_data.get('title', 'IEEE Paper'),
+                document_buffer=docx_buffer,
+                document_data=document_data
+            )
+            
+            if email_result['success']:
+                print(f"Email sent successfully to {recipient_email}", file=sys.stderr)
+                
+                self.end_headers()
+                response = json.dumps({
+                    'success': True,
+                    'message': f'IEEE paper sent successfully to {recipient_email}',
+                    'email': recipient_email,
+                    'document_title': document_data.get('title'),
+                    'file_size': len(docx_buffer.getvalue())
+                })
+                self.wfile.write(response.encode())
+            else:
+                raise Exception(email_result['error'])
+            
+        except json.JSONDecodeError as e:
+            self.send_response(400)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', 'https://format-a.vercel.app')
+            self.end_headers()
+            
+            error_response = json.dumps({
+                'success': False,
+                'error': 'Invalid JSON',
+                'message': f'Failed to parse request body: {str(e)}'
+            })
+            self.wfile.write(error_response.encode())
+            
+        except Exception as e:
+            print(f"Email generation failed: {e}", file=sys.stderr)
+            
+            self.send_response(500)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', 'https://format-a.vercel.app')
+            self.end_headers()
+            
+            error_response = json.dumps({
+                'success': False,
+                'error': 'Email generation failed',
+                'message': str(e)
+            })
+            self.wfile.write(error_response.encode())
+
+    def _send_email(self, recipient_email, document_title, document_buffer, document_data):
+        """Send email with document attachment"""
+        try:
+            # Get email configuration from environment
+            smtp_user = os.environ.get('EMAIL_USER')
+            smtp_pass = os.environ.get('EMAIL_PASS')
+            
+            if not smtp_user or not smtp_pass:
+                return {
+                    'success': False,
+                    'error': 'Email configuration not available'
+                }
+            
+            # Create email message
+            msg = MIMEMultipart()
+            msg['From'] = smtp_user
+            msg['To'] = recipient_email
+            msg['Subject'] = f'IEEE Paper: {document_title}'
+            
+            # Email body
+            authors = document_data.get('authors', [])
+            author_names = [author.get('name', '') for author in authors if author.get('name')]
+            authors_text = ', '.join(author_names) if author_names else 'Unknown'
+            
+            body = f"""
+Dear Recipient,
+
+Please find attached your IEEE-formatted paper: "{document_title}"
+
+Authors: {authors_text}
+
+This document has been generated using the Format-A IEEE Paper Generator and follows standard IEEE formatting guidelines.
+
+Best regards,
+Format-A Team
+            """.strip()
+            
+            msg.attach(MIMEText(body, 'plain'))
+            
+            # Attach document
+            document_buffer.seek(0)
+            attachment = MIMEApplication(document_buffer.read(), _subtype='vnd.openxmlformats-officedocument.wordprocessingml.document')
+            attachment.add_header('Content-Disposition', 'attachment', filename=f'{document_title}.docx')
+            msg.attach(attachment)
+            
+            # Send email
+            server = smtplib.SMTP('smtp.gmail.com', 587)
+            server.starttls()
+            server.login(smtp_user, smtp_pass)
+            server.send_message(msg)
+            server.quit()
+            
+            return {
+                'success': True,
+                'message': 'Email sent successfully'
+            }
+            
+        except Exception as e:
+            print(f"Email sending failed: {e}", file=sys.stderr)
+            return {
+                'success': False,
+                'error': f'Failed to send email: {str(e)}'
+            }
