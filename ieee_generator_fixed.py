@@ -200,7 +200,7 @@ def add_authors(doc, authors):
     spacing_para.paragraph_format.space_after = Pt(18)  # IEEE standard spacing
 
 def add_abstract(doc, abstract):
-    """Add the abstract section with italic title followed by content."""
+    """Add the abstract section with italic title followed by content on same line."""
     if abstract:
         # Add abstract with italic title and content in same paragraph
         para = doc.add_paragraph()
@@ -212,43 +212,24 @@ def add_abstract(doc, abstract):
         title_run.font.name = IEEE_CONFIG['font_name']
         title_run.font.size = IEEE_CONFIG['font_size_body']
         
-        # Add abstract content immediately after (normal weight)
+        # Add abstract content immediately after on SAME LINE (normal weight)
         content_run = para.add_run(sanitize_text(abstract))
         content_run.bold = False
         content_run.italic = False
         content_run.font.name = IEEE_CONFIG['font_name']
         content_run.font.size = IEEE_CONFIG['font_size_body']
         
-        # Apply advanced justification controls to abstract
+        # Apply basic paragraph formatting (ensure content stays on same line)
         para.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
         para.paragraph_format.space_before = Pt(0)
-        para.paragraph_format.space_after = IEEE_CONFIG['line_spacing']
+        para.paragraph_format.space_after = Pt(6)  # Standard IEEE spacing after abstract
+        para.paragraph_format.line_spacing = IEEE_CONFIG['line_spacing']
+        para.paragraph_format.line_spacing_rule = 0  # Exact spacing
         para.paragraph_format.widow_control = False
         para.paragraph_format.keep_with_next = False
-        para.paragraph_format.line_spacing = IEEE_CONFIG['line_spacing']
-        para.paragraph_format.line_spacing_rule = 0
-        
-        # Add advanced spacing controls to prevent word stretching
-        para_element = para._element
-        pPr = para_element.get_or_add_pPr()
-        
-        # Set justification method
-        jc = OxmlElement('w:jc')
-        jc.set(qn('w:val'), 'both')
-        pPr.append(jc)
-        
-        # Control text alignment
-        textAlignment = OxmlElement('w:textAlignment')
-        textAlignment.set(qn('w:val'), 'baseline')
-        pPr.append(textAlignment)
-        
-        # Prevent excessive word spacing
-        adjust_right_ind = OxmlElement('w:adjustRightInd')
-        adjust_right_ind.set(qn('w:val'), '0')
-        pPr.append(adjust_right_ind)
 
 def add_keywords(doc, keywords):
-    """Add the keywords section with italic title followed by content."""
+    """Add the keywords section with italic title followed by content on same line."""
     if keywords:
         # Add keywords with italic title and content in same paragraph
         para = doc.add_paragraph()
@@ -260,50 +241,21 @@ def add_keywords(doc, keywords):
         title_run.font.name = IEEE_CONFIG['font_name']
         title_run.font.size = IEEE_CONFIG['font_size_body']
         
-        # Add keywords content immediately after (normal weight)
+        # Add keywords content immediately after on SAME LINE (normal weight)
         content_run = para.add_run(sanitize_text(keywords))
         content_run.bold = False
         content_run.italic = False
         content_run.font.name = IEEE_CONFIG['font_name']
         content_run.font.size = IEEE_CONFIG['font_size_body']
         
-        # Apply advanced justification controls to keywords
+        # Apply basic paragraph formatting (ensure content stays on same line)
         para.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
         para.paragraph_format.space_before = Pt(0)
-        para.paragraph_format.space_after = IEEE_CONFIG['line_spacing']
+        para.paragraph_format.space_after = Pt(12)  # Standard IEEE spacing after keywords
+        para.paragraph_format.line_spacing = IEEE_CONFIG['line_spacing']
+        para.paragraph_format.line_spacing_rule = 0  # Exact spacing
         para.paragraph_format.widow_control = False
         para.paragraph_format.keep_with_next = False
-        para.paragraph_format.line_spacing = IEEE_CONFIG['line_spacing']
-        para.paragraph_format.line_spacing_rule = 0
-        
-        # Add advanced spacing controls to prevent word stretching
-        para_element = para._element
-        pPr = para_element.get_or_add_pPr()
-        
-        # Set justification method
-        jc = OxmlElement('w:jc')
-        jc.set(qn('w:val'), 'both')
-        pPr.append(jc)
-        
-        # Control text alignment
-        textAlignment = OxmlElement('w:textAlignment')
-        textAlignment.set(qn('w:val'), 'baseline')
-        pPr.append(textAlignment)
-        
-        # Prevent excessive word spacing
-        adjust_right_ind = OxmlElement('w:adjustRightInd')
-        adjust_right_ind.set(qn('w:val'), '0')
-        pPr.append(adjust_right_ind)
-        
-        # Minimal dummy paragraph to stabilize layout
-        dummy_para = doc.add_paragraph("")
-        dummy_para.paragraph_format.space_before = Pt(0)
-        dummy_para.paragraph_format.space_after = Pt(0)
-        dummy_para.paragraph_format.widow_control = False
-        dummy_para.paragraph_format.keep_with_next = False
-        dummy_para.paragraph_format.line_spacing = 0
-        if dummy_para.runs:
-            dummy_para.runs[0].font.size = Pt(1)
 
 def add_justified_paragraph(doc, text, style_name='Normal', indent_left=None, indent_right=None, space_before=None, space_after=None):
     """Add a paragraph with optimized justification settings to prevent excessive word spacing - EXACT COPY from test.py."""
