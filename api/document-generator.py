@@ -134,12 +134,32 @@ class handler(BaseHTTPRequestHandler):
         sections = document_data.get('sections', [])
         references = document_data.get('references', [])
         
-        # Format authors
-        author_names = []
-        for author in authors:
-            if author.get('name'):
-                author_names.append(author['name'])
-        authors_text = ', '.join(author_names) if author_names else 'Anonymous'
+        # Format authors in 3-column table format (IEEE standard)
+        authors_html = ''
+        if authors:
+            authors_html = '<table style="width: 100%; border-collapse: collapse; margin: 0 auto; text-align: center;"><tr>'
+            
+            for i, author in enumerate(authors):
+                if i > 0 and i % 3 == 0:  # Start new row every 3 authors
+                    authors_html += '</tr><tr>'
+                
+                author_info = f"<strong>{author.get('name', '')}</strong>"
+                if author.get('affiliation'):
+                    author_info += f"<br/><em>{author.get('affiliation', '')}</em>"
+                if author.get('email'):
+                    author_info += f"<br/>{author.get('email', '')}"
+                
+                authors_html += f'<td style="width: 33.33%; vertical-align: top; padding: 5px;">{author_info}</td>'
+            
+            # Fill remaining cells in the last row if needed
+            remaining_cells = 3 - (len(authors) % 3)
+            if remaining_cells < 3:
+                for _ in range(remaining_cells):
+                    authors_html += '<td style="width: 33.33%;"></td>'
+            
+            authors_html += '</tr></table>'
+        else:
+            authors_html = '<div style="text-align: center; font-style: italic;">Anonymous</div>'
         
         # Create HTML with IEEE-like styling
         html = f"""
@@ -208,7 +228,7 @@ class handler(BaseHTTPRequestHandler):
             </div>
             
             <div class="ieee-title">{title}</div>
-            <div class="ieee-authors">{authors_text}</div>
+            <div class="ieee-authors">{authors_html}</div>
         """
         
         # Add abstract
