@@ -200,15 +200,15 @@ def add_authors(doc, authors):
     spacing_para.paragraph_format.space_after = Pt(18)  # IEEE standard spacing
 
 def add_abstract(doc, abstract):
-    """Add the abstract section with italic title followed by content on same line."""
+    """Add the abstract section with bold title followed by content on same line."""
     if abstract:
-        # Add abstract with italic title and content in same paragraph
+        # Add abstract with bold title and content in same paragraph
         para = doc.add_paragraph()
         
-        # Italic "Abstract—" title (IEEE standard format)
+        # Bold "Abstract—" title (IEEE standard format)
         title_run = para.add_run("Abstract—")
-        title_run.italic = True
-        title_run.bold = False
+        title_run.bold = True
+        title_run.italic = False
         title_run.font.name = IEEE_CONFIG['font_name']
         title_run.font.size = IEEE_CONFIG['font_size_body']
         
@@ -229,15 +229,15 @@ def add_abstract(doc, abstract):
         para.paragraph_format.keep_with_next = False
 
 def add_keywords(doc, keywords):
-    """Add the keywords section with italic title followed by content on same line."""
+    """Add the keywords section with bold title followed by content on same line."""
     if keywords:
-        # Add keywords with italic title and content in same paragraph
+        # Add keywords with bold title and content in same paragraph
         para = doc.add_paragraph()
         
-        # Italic "Keywords—" title (IEEE standard format)
+        # Bold "Keywords—" title (IEEE standard format)
         title_run = para.add_run("Keywords—")
-        title_run.italic = True
-        title_run.bold = False
+        title_run.bold = True
+        title_run.italic = False
         title_run.font.name = IEEE_CONFIG['font_name']
         title_run.font.size = IEEE_CONFIG['font_size_body']
         
