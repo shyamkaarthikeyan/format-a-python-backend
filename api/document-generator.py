@@ -11,13 +11,15 @@ parent_dir = os.path.join(current_dir, '..')
 sys.path.insert(0, parent_dir)
 
 try:
-    # Import the generate function from the local IEEE generator
-    from ieee_generator_fixed import generate_ieee_document
+    # Import both DOCX and HTML preview functions from the IEEE generator
+    from ieee_generator_fixed import generate_ieee_document, generate_ieee_html_preview
 except ImportError as e:
     print(f"Import error: {e}", file=sys.stderr)
-    # Create a fallback function
+    # Create fallback functions
     def generate_ieee_document(data):
         raise Exception(f"IEEE generator not available: {e}")
+    def generate_ieee_html_preview(data):
+        raise Exception(f"IEEE HTML preview generator not available: {e}")
 
 # Import error handling utilities
 try:
@@ -48,7 +50,7 @@ class handler(BaseHTTPRequestHandler):
     @with_error_handling
     @log_performance("document_preview_generation")
     def do_POST(self):
-        """Handle POST requests for preview image generation"""
+        """Handle POST requests for preview generation using ieee_generator_fixed.py ONLY"""
         # Record request for monitoring
         if 'health_monitor' in globals():
             health_monitor.record_request()
@@ -68,17 +70,22 @@ class handler(BaseHTTPRequestHandler):
         # Validate required fields
         validate_request_data(document_data, ['title'])
         
-        # Generate the DOCX document using the reliable IEEE generator
+        # Generate HTML preview using ieee_generator_fixed.py
         try:
-            docx_buffer = generate_ieee_document(document_data)
-            print("DOCX generated successfully", file=sys.stderr)
+            print("Generating HTML preview using ieee_generator_fixed.py", file=sys.stderr)
+            preview_html = generate_ieee_html_preview(document_data)
             
-            # Create a simple HTML preview instead of images (more reliable)
-            preview_html = self._create_html_preview(document_data)
+            # Also verify DOCX generation works
+            try:
+                docx_buffer = generate_ieee_document(document_data)
+                print("DOCX generation verified successfully", file=sys.stderr)
+            except Exception as docx_error:
+                print(f"DOCX generation failed: {docx_error}", file=sys.stderr)
             
             response_data = {
                 'preview_type': 'html',
-                'html_content': preview_html
+                'html_content': preview_html,
+                'generator': 'ieee_generator_fixed.py'
             }
             
             # Set CORS headers for the response
@@ -92,24 +99,15 @@ class handler(BaseHTTPRequestHandler):
             response = {
                 'success': True,
                 'data': response_data,
-                'message': 'Preview generated successfully'
+                'message': 'IEEE preview generated successfully using ieee_generator_fixed.py'
             }
             self.wfile.write(json.dumps(response).encode())
             
-        except Exception as docx_error:
-            print(f"DOCX generation failed: {docx_error}", file=sys.stderr)
+        except Exception as preview_error:
+            print(f"IEEE preview generation failed: {preview_error}", file=sys.stderr)
             
-            # Still provide a basic preview based on the data
-            preview_html = self._create_html_preview(document_data)
-            
-            response_data = {
-                'preview_type': 'html',
-                'html_content': preview_html,
-                'fallback': True
-            }
-            
-            # Set CORS headers for the fallback response
-            self.send_response(200)
+            # Send error response
+            self.send_response(500)
             self.send_header('Content-Type', 'application/json')
             self.send_header('Access-Control-Allow-Origin', '*')
             self.send_header('Access-Control-Allow-Methods', 'POST, OPTIONS')
@@ -117,157 +115,9 @@ class handler(BaseHTTPRequestHandler):
             self.end_headers()
             
             response = {
-                'success': True,
-                'data': response_data,
-                'message': 'Basic preview generated (downloads will have full IEEE formatting)'
+                'success': False,
+                'error': 'Preview generation failed',
+                'message': f'IEEE preview generation failed: {str(preview_error)}',
+                'generator': 'ieee_generator_fixed.py'
             }
             self.wfile.write(json.dumps(response).encode())
-
-    def _create_html_preview(self, document_data):
-        """Create an HTML preview that mimics IEEE formatting"""
-        
-        # Extract document data
-        title = document_data.get('title', 'Untitled Document')
-        authors = document_data.get('authors', [])
-        abstract = document_data.get('abstract', '')
-        keywords = document_data.get('keywords', '')
-        sections = document_data.get('sections', [])
-        references = document_data.get('references', [])
-        
-        # Format authors in 3-column table format (IEEE standard)
-        authors_html = ''
-        if authors:
-            authors_html = '<table style="width: 100%; border-collapse: collapse; margin: 0 auto; text-align: center;"><tr>'
-            
-            for i, author in enumerate(authors):
-                if i > 0 and i % 3 == 0:  # Start new row every 3 authors
-                    authors_html += '</tr><tr>'
-                
-                author_info = f"<strong>{author.get('name', '')}</strong>"
-                if author.get('affiliation'):
-                    author_info += f"<br/><em>{author.get('affiliation', '')}</em>"
-                if author.get('email'):
-                    author_info += f"<br/>{author.get('email', '')}"
-                
-                authors_html += f'<td style="width: 33.33%; vertical-align: top; padding: 5px;">{author_info}</td>'
-            
-            # Fill remaining cells in the last row if needed
-            remaining_cells = 3 - (len(authors) % 3)
-            if remaining_cells < 3:
-                for _ in range(remaining_cells):
-                    authors_html += '<td style="width: 33.33%;"></td>'
-            
-            authors_html += '</tr></table>'
-        else:
-            authors_html = '<div style="text-align: center; font-style: italic;">Anonymous</div>'
-        
-        # Create HTML with IEEE-like styling
-        html = f"""
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="utf-8">
-            <style>
-                body {{
-                    font-family: 'Times New Roman', serif;
-                    font-size: 9.5pt;
-                    line-height: 1.2;
-                    margin: 20px;
-                    background: white;
-                    color: black;
-                }}
-                .ieee-title {{
-                    font-size: 14pt;
-                    font-weight: bold;
-                    text-align: center;
-                    margin: 20px 0;
-                    line-height: 1.3;
-                }}
-                .ieee-authors {{
-                    font-size: 10pt;
-                    text-align: center;
-                    margin: 15px 0;
-                    font-style: italic;
-                }}
-                .ieee-section {{
-                    margin: 15px 0;
-                    text-align: justify;
-                }}
-                .ieee-abstract-title {{
-                    font-weight: bold;
-                    display: inline;
-                }}
-                .ieee-keywords-title {{
-                    font-weight: bold;
-                    display: inline;
-                }}
-                .ieee-heading {{
-                    font-weight: bold;
-                    margin: 15px 0 5px 0;
-                    text-transform: uppercase;
-                }}
-                .ieee-reference {{
-                    margin: 3px 0;
-                    padding-left: 15px;
-                    text-indent: -15px;
-                }}
-                .preview-note {{
-                    background: #f0f8ff;
-                    border: 1px solid #d0e7ff;
-                    padding: 10px;
-                    margin: 10px 0;
-                    font-size: 8pt;
-                    color: #666;
-                    text-align: center;
-                }}
-            </style>
-        </head>
-        <body>
-            <div class="preview-note">
-                📄 Live IEEE Preview - Download buttons provide full formatting
-            </div>
-            
-            <div class="ieee-title">{title}</div>
-            <div class="ieee-authors">{authors_html}</div>
-        """
-        
-        # Add abstract
-        if abstract:
-            html += f"""
-            <div class="ieee-section">
-                <span class="ieee-abstract-title">Abstract—</span>{abstract}
-            </div>
-            """
-        
-        # Add keywords
-        if keywords:
-            html += f"""
-            <div class="ieee-section">
-                <span class="ieee-keywords-title">Keywords—</span>{keywords}
-            </div>
-            """
-        
-        # Add sections
-        for i, section in enumerate(sections):
-            if section.get('title') and section.get('content'):
-                html += f"""
-                <div class="ieee-heading">{i+1}. {section['title']}</div>
-                <div class="ieee-section">{section['content']}</div>
-                """
-        
-        # Add references
-        if references:
-            html += '<div class="ieee-heading">References</div>'
-            for i, ref in enumerate(references):
-                if ref.get('text'):
-                    html += f'<div class="ieee-reference">[{i+1}] {ref["text"]}</div>'
-        
-        html += """
-            <div class="preview-note">
-                ✨ Perfect IEEE formatting available via Download Word/PDF buttons
-            </div>
-        </body>
-        </html>
-        """
-        
-        return html
