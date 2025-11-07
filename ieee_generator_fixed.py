@@ -127,25 +127,39 @@ def add_authors(doc, authors):
         return
     
     # Create table for IEEE 3-column author layout
-    num_authors = len(authors)
+    num_authors = min(len(authors), 3)  # IEEE typically shows max 3 authors per row
     table = doc.add_table(rows=1, cols=num_authors)
     table.alignment = WD_ALIGN_PARAGRAPH.CENTER
     table.allow_autofit = True
     
+    # Set table width to full page width
+    table.style = 'Table Grid'
+    table.style.font.name = IEEE_CONFIG['font_name']
+    table.style.font.size = IEEE_CONFIG['font_size_body']
+    
     # Remove table borders for clean IEEE look
     for row in table.rows:
         for cell in row.cells:
-            cell._element.get_or_add_tcPr().append(
-                OxmlElement('w:tcBorders')
-            )
+            # Remove all borders
+            tc = cell._element
+            tcPr = tc.get_or_add_tcPr()
+            tcBorders = OxmlElement('w:tcBorders')
+            for border_name in ['top', 'left', 'bottom', 'right', 'insideH', 'insideV']:
+                border = OxmlElement(f'w:{border_name}')
+                border.set(qn('w:val'), 'nil')
+                tcBorders.append(border)
+            tcPr.append(tcBorders)
     
     # Process each author in their own column
-    for idx, author in enumerate(authors):
+    for idx, author in enumerate(authors[:num_authors]):
         if not author.get('name'):
             continue
             
         cell = table.cell(0, idx)
         cell.vertical_alignment = WD_ALIGN_VERTICAL.TOP
+        
+        # Set equal column widths for proper IEEE layout
+        cell.width = Inches(2.0)  # Equal width columns
         
         # Add proper cell margins for IEEE spacing
         cell_element = cell._element
@@ -155,82 +169,82 @@ def add_authors(doc, authors):
         # Set cell margins for proper IEEE author block spacing
         for side in ['left', 'right', 'top', 'bottom']:
             margin = OxmlElement(f'w:{side}')
-            margin.set(qn('w:w'), '120')  # IEEE standard author block spacing
+            margin.set(qn('w:w'), '144')  # 0.1 inch margins
             margin.set(qn('w:type'), 'dxa')
             margins.append(margin)
         cell_properties.append(margins)
         
+        # Clear any existing content
+        cell._element.clear_content()
+        
         # Author name - bold, centered (IEEE standard)
-        para = cell.add_paragraph()
-        run = para.add_run(author['name'])
-        run.bold = True  # IEEE standard: author names are bold in blocks
-        run.font.name = IEEE_CONFIG['font_name']
-        run.font.size = IEEE_CONFIG['font_size_body']
-        para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        para.paragraph_format.space_before = Pt(0)
-        para.paragraph_format.space_after = Pt(3)
+        name_para = cell.add_paragraph()
+        name_run = name_para.add_run(sanitize_text(author['name']))
+        name_run.bold = True  # IEEE standard: author names are bold
+        name_run.font.name = IEEE_CONFIG['font_name']
+        name_run.font.size = IEEE_CONFIG['font_size_body']
+        name_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        name_para.paragraph_format.space_before = Pt(0)
+        name_para.paragraph_format.space_after = Pt(6)
         
-        # Department (if available) - italic, centered
-        if author.get('department'):
-            para = cell.add_paragraph(sanitize_text(author['department']))
-            para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            para.paragraph_format.space_before = Pt(0)
-            para.paragraph_format.space_after = Pt(2)
-            if para.runs:
-                para.runs[0].italic = True
-                para.runs[0].font.name = IEEE_CONFIG['font_name']
-                para.runs[0].font.size = IEEE_CONFIG['font_size_body']
+        # Process affiliation - handle both string and structured data
+        affiliation_text = ""
+        if isinstance(author.get('affiliation'), str):
+            affiliation_text = author['affiliation']
+        elif isinstance(author.get('affiliation'), dict):
+            # Handle structured affiliation
+            affil_parts = []
+            for key in ['department', 'organization', 'university', 'institution']:
+                if author['affiliation'].get(key):
+                    affil_parts.append(author['affiliation'][key])
+            affiliation_text = '\n'.join(affil_parts)
         
-        # Organization (if available) - italic, centered
-        if author.get('organization'):
-            para = cell.add_paragraph(sanitize_text(author['organization']))
-            para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            para.paragraph_format.space_before = Pt(0)
-            para.paragraph_format.space_after = Pt(2)
-            if para.runs:
-                para.runs[0].italic = True
-                para.runs[0].font.name = IEEE_CONFIG['font_name']
-                para.runs[0].font.size = IEEE_CONFIG['font_size_body']
+        # Handle legacy fields for backward compatibility
+        if not affiliation_text:
+            affil_parts = []
+            if author.get('department'):
+                affil_parts.append(author['department'])
+            if author.get('organization'):
+                affil_parts.append(author['organization'])
+            if author.get('university'):
+                affil_parts.append(author['university'])
+            if author.get('institution'):
+                affil_parts.append(author['institution'])
+            affiliation_text = '\n'.join(affil_parts)
         
-        # City and State (if available) - italic, centered
-        location_parts = []
-        if author.get('city'):
-            location_parts.append(author['city'])
-        if author.get('state'):
-            location_parts.append(author['state'])
+        # Add affiliation lines - each line centered and italic
+        if affiliation_text:
+            affiliation_lines = affiliation_text.strip().split('\n')
+            for line in affiliation_lines:
+                line = line.strip()
+                if line and not line.lower().startswith('email'):  # Skip email lines here
+                    affil_para = cell.add_paragraph()
+                    affil_run = affil_para.add_run(sanitize_text(line))
+                    affil_run.italic = True  # IEEE standard: affiliations are italic
+                    affil_run.font.name = IEEE_CONFIG['font_name']
+                    affil_run.font.size = IEEE_CONFIG['font_size_body']
+                    affil_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                    affil_para.paragraph_format.space_before = Pt(0)
+                    affil_para.paragraph_format.space_after = Pt(3)
         
-        if location_parts:
-            location_text = ', '.join(location_parts)
-            para = cell.add_paragraph(sanitize_text(location_text))
-            para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            para.paragraph_format.space_before = Pt(0)
-            para.paragraph_format.space_after = Pt(2)
-            if para.runs:
-                para.runs[0].italic = True
-                para.runs[0].font.name = IEEE_CONFIG['font_name']
-                para.runs[0].font.size = IEEE_CONFIG['font_size_body']
+        # Handle email separately - extract from affiliation or use email field
+        email = author.get('email', '')
+        if not email and affiliation_text:
+            # Try to extract email from affiliation text
+            import re
+            email_match = re.search(r'([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})', affiliation_text)
+            if email_match:
+                email = email_match.group(1)
         
-        # Email (if available) - normal, centered, smaller font
-        if author.get('email'):
-            para = cell.add_paragraph(sanitize_text(author['email']))
-            para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            para.paragraph_format.space_before = Pt(1)
-            para.paragraph_format.space_after = Pt(0)
-            if para.runs:
-                para.runs[0].font.name = IEEE_CONFIG['font_name']
-                para.runs[0].font.size = Pt(9)  # Slightly smaller for email
-        
-        # Custom fields (if available) - italic, centered
-        for custom_field in author.get('custom_fields', []):
-            if custom_field.get('value'):
-                para = cell.add_paragraph(sanitize_text(custom_field['value']))
-                para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                para.paragraph_format.space_before = Pt(0)
-                para.paragraph_format.space_after = Pt(1)
-                if para.runs:
-                    para.runs[0].italic = True
-                    para.runs[0].font.name = IEEE_CONFIG['font_name']
-                    para.runs[0].font.size = IEEE_CONFIG['font_size_body']
+        # Add email if found
+        if email:
+            email_para = cell.add_paragraph()
+            email_run = email_para.add_run(sanitize_text(email))
+            email_run.font.name = IEEE_CONFIG['font_name']
+            email_run.font.size = Pt(9)  # Slightly smaller for email
+            email_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            email_para.paragraph_format.space_before = Pt(3)
+            email_para.paragraph_format.space_after = Pt(0)
     
     # Add proper spacing after authors section
     spacing_para = doc.add_paragraph()
