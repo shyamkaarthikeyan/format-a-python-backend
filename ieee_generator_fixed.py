@@ -119,107 +119,90 @@ def add_title(doc, title):
     para.paragraph_format.space_after = Pt(12)
 
 def add_authors(doc, authors):
-    """Add authors with proper IEEE formatting and spacing."""
+    """Add authors with proper IEEE formatting - comma separated format."""
     if not authors:
         return
     
-    num_authors = len(authors)
-    if num_authors == 0:
+    if len(authors) == 0:
         return
     
-    # Create table with proper spacing for multiple authors
-    table = doc.add_table(rows=1, cols=num_authors)
-    table.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    table.allow_autofit = True
+    # Build comma-separated author string (IEEE standard format)
+    author_names = []
+    for author in authors:
+        if author.get('name'):
+            author_names.append(author['name'])
     
-    # Set consistent column widths for better spacing
-    for idx, author in enumerate(authors):
-        if not author.get('name'):
-            continue
-            
-        cell = table.cell(0, idx)
-        cell.vertical_alignment = WD_ALIGN_VERTICAL.TOP
+    if not author_names:
+        return
+    
+    # Create comma-separated author line
+    authors_text = ', '.join(author_names)
+    
+    # Add author names paragraph - centered, normal weight
+    para = doc.add_paragraph()
+    run = para.add_run(authors_text)
+    run.bold = False  # IEEE standard: author names are not bold
+    run.font.name = IEEE_CONFIG['font_name']
+    run.font.size = IEEE_CONFIG['font_size_body']
+    para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    para.paragraph_format.space_before = Pt(0)
+    para.paragraph_format.space_after = Pt(6)
+    
+    # Add affiliations if available (centered, italic)
+    affiliations = []
+    for author in authors:
+        affiliation_parts = []
+        if author.get('department'):
+            affiliation_parts.append(author['department'])
+        if author.get('organization'):
+            affiliation_parts.append(author['organization'])
+        if author.get('city'):
+            affiliation_parts.append(author['city'])
+        if author.get('state'):
+            affiliation_parts.append(author['state'])
         
-        # Add proper cell margins for spacing
-        cell_element = cell._element
-        cell_properties = cell_element.get_or_add_tcPr()
-        margins = OxmlElement('w:tcMar')
-        
-        # Set cell margins (IEEE spacing between authors)
-        for side in ['left', 'right', 'top', 'bottom']:
-            margin = OxmlElement(f'w:{side}')
-            margin.set(qn('w:w'), '100')  # 100 twips = better spacing
-            margin.set(qn('w:type'), 'dxa')
-            margins.append(margin)
-        cell_properties.append(margins)
-        
-        # Author name - bold, centered
-        para = cell.add_paragraph()
-        run = para.add_run(author['name'])
-        run.bold = True
-        run.font.name = IEEE_CONFIG['font_name']
-        run.font.size = IEEE_CONFIG['font_size_body']
-        para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        para.paragraph_format.space_before = Pt(0)
-        para.paragraph_format.space_after = Pt(3)  # Consistent spacing
-        
-        # Author details - italic, centered, with proper spacing
-        fields = [
-            ('department', 'Department'),
-            ('organization', 'Organization'),
-            ('city', 'City'),
-            ('state', 'State'),
-            ('tamilnadu', 'Tamil Nadu')
-        ]
-        
-        for field_key, field_name in fields:
-            if author.get(field_key):
-                para = cell.add_paragraph(sanitize_text(author[field_key]))
-                para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                para.paragraph_format.space_before = Pt(0)
-                para.paragraph_format.space_after = Pt(1)  # Tight spacing between details
-                if para.runs:
-                    para.runs[0].italic = True
-                    para.runs[0].font.name = IEEE_CONFIG['font_name']
-                    para.runs[0].font.size = IEEE_CONFIG['font_size_body']
-        
-        # Custom fields with consistent formatting
-        for custom_field in author.get('custom_fields', []):
-            if custom_field['value']:
-                para = cell.add_paragraph(sanitize_text(custom_field['value']))
-                para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                para.paragraph_format.space_before = Pt(0)
-                para.paragraph_format.space_after = Pt(1)
-                if para.runs:
-                    para.runs[0].italic = True
-                    para.runs[0].font.name = IEEE_CONFIG['font_name']
-                    para.runs[0].font.size = IEEE_CONFIG['font_size_body']
+        if affiliation_parts:
+            affiliations.append(', '.join(affiliation_parts))
+    
+    # Add unique affiliations
+    unique_affiliations = list(dict.fromkeys(affiliations))  # Remove duplicates while preserving order
+    
+    for affiliation in unique_affiliations:
+        if affiliation:
+            para = doc.add_paragraph()
+            run = para.add_run(affiliation)
+            run.italic = True  # IEEE standard: affiliations in italic
+            run.font.name = IEEE_CONFIG['font_name']
+            run.font.size = IEEE_CONFIG['font_size_body']
+            para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            para.paragraph_format.space_before = Pt(0)
+            para.paragraph_format.space_after = Pt(3)
     
     # Add proper spacing after authors section
     spacing_para = doc.add_paragraph()
     spacing_para.paragraph_format.space_after = Pt(18)  # IEEE standard spacing
 
 def add_abstract(doc, abstract):
-    """Add the abstract section with bold title followed by content on same line."""
+    """Add the abstract section with italic title followed by justified content."""
     if abstract:
-        # Add abstract with bold title and content in same paragraph
+        # Add abstract with italic title and content in same paragraph
         para = doc.add_paragraph()
         
-        # Bold "Abstract—" title (IEEE standard format)
+        # Italic "Abstract—" title (IEEE standard format)
         title_run = para.add_run("Abstract—")
-        title_run.bold = True
-        title_run.italic = False
+        title_run.bold = False  # Not bold
+        title_run.italic = True  # IEEE standard: italic title
         title_run.font.name = IEEE_CONFIG['font_name']
         title_run.font.size = IEEE_CONFIG['font_size_body']
         
         # Add abstract content immediately after on SAME LINE (normal weight)
         content_run = para.add_run(sanitize_text(abstract))
         content_run.bold = False
-        content_run.italic = False
+        content_run.italic = False  # Content is normal weight
         content_run.font.name = IEEE_CONFIG['font_name']
         content_run.font.size = IEEE_CONFIG['font_size_body']
         
-        # Apply basic paragraph formatting (ensure content stays on same line)
+        # Apply proper IEEE justification formatting
         para.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
         para.paragraph_format.space_before = Pt(0)
         para.paragraph_format.space_after = Pt(6)  # Standard IEEE spacing after abstract
@@ -227,28 +210,47 @@ def add_abstract(doc, abstract):
         para.paragraph_format.line_spacing_rule = 0  # Exact spacing
         para.paragraph_format.widow_control = False
         para.paragraph_format.keep_with_next = False
+        
+        # Add advanced justification controls for equal spacing
+        para_element = para._element
+        pPr = para_element.get_or_add_pPr()
+        
+        # Set justification method for even word spacing
+        jc = OxmlElement('w:jc')
+        jc.set(qn('w:val'), 'both')  # Both justified for even spacing
+        pPr.append(jc)
+        
+        # Control text alignment - prevents uneven spacing
+        textAlignment = OxmlElement('w:textAlignment')
+        textAlignment.set(qn('w:val'), 'baseline')
+        pPr.append(textAlignment)
+        
+        # Prevent excessive word spacing expansion
+        adjust_right_ind = OxmlElement('w:adjustRightInd')
+        adjust_right_ind.set(qn('w:val'), '0')
+        pPr.append(adjust_right_ind)
 
 def add_keywords(doc, keywords):
-    """Add the keywords section with bold title followed by content on same line."""
+    """Add the keywords section with italic title followed by justified content."""
     if keywords:
-        # Add keywords with bold title and content in same paragraph
+        # Add keywords with italic title and content in same paragraph
         para = doc.add_paragraph()
         
-        # Bold "Keywords—" title (IEEE standard format)
+        # Italic "Keywords—" title (IEEE standard format)
         title_run = para.add_run("Keywords—")
-        title_run.bold = True
-        title_run.italic = False
+        title_run.bold = False  # Not bold
+        title_run.italic = True  # IEEE standard: italic title
         title_run.font.name = IEEE_CONFIG['font_name']
         title_run.font.size = IEEE_CONFIG['font_size_body']
         
         # Add keywords content immediately after on SAME LINE (normal weight)
         content_run = para.add_run(sanitize_text(keywords))
         content_run.bold = False
-        content_run.italic = False
+        content_run.italic = False  # Content is normal weight
         content_run.font.name = IEEE_CONFIG['font_name']
         content_run.font.size = IEEE_CONFIG['font_size_body']
         
-        # Apply basic paragraph formatting (ensure content stays on same line)
+        # Apply proper IEEE justification formatting
         para.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
         para.paragraph_format.space_before = Pt(0)
         para.paragraph_format.space_after = Pt(12)  # Standard IEEE spacing after keywords
@@ -256,6 +258,25 @@ def add_keywords(doc, keywords):
         para.paragraph_format.line_spacing_rule = 0  # Exact spacing
         para.paragraph_format.widow_control = False
         para.paragraph_format.keep_with_next = False
+        
+        # Add advanced justification controls for equal spacing
+        para_element = para._element
+        pPr = para_element.get_or_add_pPr()
+        
+        # Set justification method for even word spacing
+        jc = OxmlElement('w:jc')
+        jc.set(qn('w:val'), 'both')  # Both justified for even spacing
+        pPr.append(jc)
+        
+        # Control text alignment - prevents uneven spacing
+        textAlignment = OxmlElement('w:textAlignment')
+        textAlignment.set(qn('w:val'), 'baseline')
+        pPr.append(textAlignment)
+        
+        # Prevent excessive word spacing expansion
+        adjust_right_ind = OxmlElement('w:adjustRightInd')
+        adjust_right_ind.set(qn('w:val'), '0')
+        pPr.append(adjust_right_ind)
 
 def add_justified_paragraph(doc, text, style_name='Normal', indent_left=None, indent_right=None, space_before=None, space_after=None):
     """Add a paragraph with optimized justification settings to prevent excessive word spacing - EXACT COPY from test.py."""
