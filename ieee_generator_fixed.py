@@ -534,6 +534,81 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
                     caption.runs[0].font.size = IEEE_CONFIG['font_size_caption']
             except Exception as e:
                 print(f"Error processing image: {e}", file=sys.stderr)
+                
+        elif block.get('type') == 'table' and block.get('data') and block.get('tableName'):
+            # Handle table blocks
+            import base64
+            try:
+                image_data = block['data']
+                
+                # Handle base64 data - remove prefix if present
+                if ',' in image_data:
+                    image_data = image_data.split(',')[1]
+                
+                # Decode base64 image data
+                try:
+                    image_bytes = base64.b64decode(image_data)
+                except Exception as e:
+                    print(f"ERROR: Failed to decode table image data: {str(e)}", file=sys.stderr)
+                    continue
+                
+                # Create image stream
+                image_stream = BytesIO(image_bytes)
+                
+                para = doc.add_paragraph()
+                run = para.add_run()
+                # Tables can be wider than figures
+                table_width = IEEE_CONFIG['column_width'] * 1.2
+                picture = run.add_picture(image_stream, width=table_width)
+                if picture.height > IEEE_CONFIG['max_figure_height']:
+                    scale_factor = IEEE_CONFIG['max_figure_height'] / picture.height
+                    run.clear()
+                    run.add_picture(image_stream, width=table_width * scale_factor, height=IEEE_CONFIG['max_figure_height'])
+                
+                para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                para.paragraph_format.space_before = Pt(6)
+                para.paragraph_format.space_after = Pt(6)
+                
+                # Generate table number based on section and table position
+                table_count = sum(1 for b in content_blocks[:block_idx+1] if b.get('type') == 'table')
+                caption = doc.add_paragraph(f"Table {section_idx}.{table_count}: {sanitize_text(block['tableName'])}")
+                caption.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                caption.paragraph_format.space_before = Pt(0)
+                caption.paragraph_format.space_after = Pt(12)
+                if caption.runs:
+                    caption.runs[0].font.name = IEEE_CONFIG['font_name']
+                    caption.runs[0].font.size = IEEE_CONFIG['font_size_caption']
+            except Exception as e:
+                print(f"Error processing table: {e}", file=sys.stderr)
+                
+        elif block.get('type') == 'equation' and block.get('content'):
+            # Handle equation blocks
+            try:
+                equation_content = sanitize_text(block['content'])
+                
+                # Add equation paragraph with center alignment
+                para = doc.add_paragraph()
+                run = para.add_run(equation_content)
+                run.font.name = IEEE_CONFIG['font_name']
+                run.font.size = IEEE_CONFIG['font_size_body']
+                run.italic = True  # Equations are typically italic
+                
+                para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                para.paragraph_format.space_before = Pt(6)
+                para.paragraph_format.space_after = Pt(6)
+                
+                # Add equation number (optional)
+                eq_count = sum(1 for b in content_blocks[:block_idx+1] if b.get('type') == 'equation')
+                eq_number_para = doc.add_paragraph(f"({section_idx}.{eq_count})")
+                eq_number_para.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+                eq_number_para.paragraph_format.space_before = Pt(0)
+                eq_number_para.paragraph_format.space_after = Pt(12)
+                if eq_number_para.runs:
+                    eq_number_para.runs[0].font.name = IEEE_CONFIG['font_name']
+                    eq_number_para.runs[0].font.size = IEEE_CONFIG['font_size_body']
+                    
+            except Exception as e:
+                print(f"Error processing equation: {e}", file=sys.stderr)
 
     # Legacy support for old content field - EXACT same as test.py
     if not content_blocks and section_data.get('content'):
@@ -1114,16 +1189,74 @@ def generate_ieee_html_preview(form_data):
             
             # Process content blocks within the section
             content_blocks = section.get('contentBlocks', [])
+            img_count = 0
             for block in content_blocks:
                 block_type = block.get('type', 'text')
                 block_content = sanitize_text(block.get('content', ''))
                 
                 if block_type == 'text' and block_content:
                     html += f'<div class="content-block">{block_content}</div>'
-                elif block_type == 'figure' and block_content:
-                    html += f'<div class="content-block figure-caption">Fig. {i}. {block_content}</div>'
+                    
+                    # Check if this text block has an attached image
+                    if block.get('data') and block.get('caption'):
+                        img_count += 1
+                        image_data = block.get('data')
+                        caption = sanitize_text(block.get('caption', ''))
+                        
+                        # Add image with proper base64 format
+                        if not image_data.startswith('data:'):
+                            image_data = f"data:image/png;base64,{image_data}"
+                        
+                        html += f'''
+                        <div class="content-block" style="text-align: center; margin: 15px 0;">
+                            <img src="{image_data}" alt="Figure {i}.{img_count}" style="max-width: 80%; height: auto; border: 1px solid #ddd; border-radius: 4px;" />
+                            <div class="figure-caption">Fig. {i}.{img_count}: {caption}</div>
+                        </div>
+                        '''
+                        
+                elif block_type == 'image' and block.get('data') and block.get('caption'):
+                    # Handle standalone image blocks
+                    img_count += 1
+                    image_data = block.get('data')
+                    caption = sanitize_text(block.get('caption', ''))
+                    
+                    # Add image with proper base64 format
+                    if not image_data.startswith('data:'):
+                        image_data = f"data:image/png;base64,{image_data}"
+                    
+                    html += f'''
+                    <div class="content-block" style="text-align: center; margin: 15px 0;">
+                        <img src="{image_data}" alt="Figure {i}.{img_count}" style="max-width: 80%; height: auto; border: 1px solid #ddd; border-radius: 4px;" />
+                        <div class="figure-caption">Fig. {i}.{img_count}: {caption}</div>
+                    </div>
+                    '''
+                    
+                elif block_type == 'table' and block.get('data') and block.get('tableName'):
+                    # Handle table blocks with images
+                    table_count = sum(1 for b in content_blocks[:content_blocks.index(block)+1] if b.get('type') == 'table')
+                    image_data = block.get('data')
+                    table_name = sanitize_text(block.get('tableName', ''))
+                    
+                    # Add image with proper base64 format
+                    if not image_data.startswith('data:'):
+                        image_data = f"data:image/png;base64,{image_data}"
+                    
+                    html += f'''
+                    <div class="content-block" style="text-align: center; margin: 15px 0;">
+                        <img src="{image_data}" alt="Table {i}.{table_count}" style="max-width: 90%; height: auto; border: 1px solid #ddd; border-radius: 4px;" />
+                        <div class="figure-caption">Table {i}.{table_count}: {table_name}</div>
+                    </div>
+                    '''
+                    
                 elif block_type == 'equation' and block_content:
-                    html += f'<div class="content-block" style="text-align: center; margin: 15px 0;">{block_content}</div>'
+                    # Handle equation blocks
+                    eq_count = sum(1 for b in content_blocks[:content_blocks.index(block)+1] if b.get('type') == 'equation')
+                    html += f'''
+                    <div class="content-block" style="text-align: center; margin: 15px 0;">
+                        <div style="font-style: italic; font-size: 11pt; margin: 10px 0;">{block_content}</div>
+                        <div style="text-align: right; font-size: 9pt;">({i}.{eq_count})</div>
+                    </div>
+                    '''
     
     # Add references
     if references:
