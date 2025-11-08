@@ -1100,7 +1100,7 @@ def generate_ieee_html_preview(form_data):
     if keywords:
         html += f"""
         <div class="ieee-section">
-            <span class="ieee-keywords-title">Index Terms—</span>{keywords}
+            <span class="ieee-keywords-title">Keywords—</span>{keywords}
         </div>
         """
     
