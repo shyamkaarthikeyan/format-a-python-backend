@@ -281,10 +281,10 @@ def add_abstract(doc, abstract):
         title_run.font.name = IEEE_CONFIG['font_name']
         title_run.font.size = IEEE_CONFIG['font_size_body']
         
-        # Add abstract content immediately after on SAME LINE (normal weight)
+        # Add abstract content immediately after on SAME LINE (bold weight)
         content_run = para.add_run(sanitize_text(abstract))
-        content_run.bold = False
-        content_run.italic = False  # Content is normal weight
+        content_run.bold = True  # Content is bold as requested
+        content_run.italic = False
         content_run.font.name = IEEE_CONFIG['font_name']
         content_run.font.size = IEEE_CONFIG['font_size_body']
         
@@ -313,10 +313,10 @@ def add_keywords(doc, keywords):
         title_run.font.name = IEEE_CONFIG['font_name']
         title_run.font.size = IEEE_CONFIG['font_size_body']
         
-        # Add keywords content immediately after on SAME LINE (normal weight)
+        # Add keywords content immediately after on SAME LINE (bold weight)
         content_run = para.add_run(sanitize_text(keywords))
-        content_run.bold = False
-        content_run.italic = False  # Content is normal weight
+        content_run.bold = True  # Content is bold as requested
+        content_run.italic = False
         content_run.font.name = IEEE_CONFIG['font_name']
         content_run.font.size = IEEE_CONFIG['font_size_body']
         
