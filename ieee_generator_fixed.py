@@ -1414,6 +1414,59 @@ def generate_ieee_html_preview(form_data):
                         <div style="text-align: right; font-size: 9pt;">({i}.{eq_count})</div>
                     </div>
                     '''
+            
+            # Process subsections for this section
+            subsections = section.get('subsections', [])
+            if subsections:
+                # Process level 1 subsections first
+                level_1_subsections = [s for s in subsections if s.get('level', 1) == 1 and not s.get('parentId')]
+                level_1_subsections.sort(key=lambda x: x.get('order', 0))
+                
+                for sub_idx, subsection in enumerate(level_1_subsections, 1):
+                    if subsection.get('title'):
+                        subsection_number = f"{i}.{sub_idx}"
+                        subsection_title = sanitize_text(subsection['title'])
+                        html += f'<div class="ieee-heading" style="text-align: left; text-transform: none; margin-top: 20px;">{subsection_number} {subsection_title}</div>'
+                    
+                    if subsection.get('content'):
+                        subsection_content = sanitize_text(subsection['content'])
+                        html += f'<div class="content-block">{subsection_content}</div>'
+                    
+                    # Process subsection content blocks if they exist
+                    if subsection.get('contentBlocks'):
+                        sub_content_blocks = subsection.get('contentBlocks', [])
+                        sub_img_count = 0
+                        for sub_block in sub_content_blocks:
+                            sub_block_type = sub_block.get('type', 'text')
+                            sub_block_content = sanitize_text(sub_block.get('content', ''))
+                            
+                            if sub_block_type == 'text' and sub_block_content:
+                                html += f'<div class="content-block">{sub_block_content}</div>'
+                            # Add other block types as needed for subsections
+                    
+                    # Process nested subsections (level 2 and beyond)
+                    def process_nested_subsections(parent_id, parent_number, level):
+                        nonlocal html  # Allow modification of html variable from outer scope
+                        child_subsections = [s for s in subsections if s.get('parentId') == parent_id and s.get('level', 1) == level]
+                        child_subsections.sort(key=lambda x: x.get('order', 0))
+                        
+                        for child_idx, child_sub in enumerate(child_subsections, 1):
+                            child_number = f"{parent_number}.{child_idx}"
+                            
+                            if child_sub.get('title'):
+                                child_title = sanitize_text(child_sub['title'])
+                                html += f'<div class="ieee-heading" style="text-align: left; text-transform: none; margin-top: 15px; font-size: 10pt;">{child_number} {child_title}</div>'
+                            
+                            if child_sub.get('content'):
+                                child_content = sanitize_text(child_sub['content'])
+                                html += f'<div class="content-block">{child_content}</div>'
+                            
+                            # Recursively process deeper levels (limit to prevent excessive nesting)
+                            if level < 5:
+                                process_nested_subsections(child_sub['id'], child_number, level + 1)
+                    
+                    # Process nested subsections for this level 1 subsection
+                    process_nested_subsections(subsection['id'], subsection_number, 2)
     
     # Add references
     if references:
