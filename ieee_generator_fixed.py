@@ -535,51 +535,163 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
             except Exception as e:
                 print(f"Error processing image: {e}", file=sys.stderr)
                 
-        elif block.get('type') == 'table' and block.get('data') and block.get('tableName'):
-            # Handle table blocks
-            import base64
-            try:
-                image_data = block['data']
-                
-                # Handle base64 data - remove prefix if present
-                if ',' in image_data:
-                    image_data = image_data.split(',')[1]
-                
-                # Decode base64 image data
+        elif block.get('type') == 'table':
+            # Handle different table types: interactive, image, or latex
+            table_type = block.get('tableType', 'image')  # Default to image for backward compatibility
+            
+            if table_type == 'interactive' and block.get('headers') and block.get('tableData'):
+                # Handle interactive tables with headers and data
                 try:
-                    image_bytes = base64.b64decode(image_data)
+                    headers = block.get('headers', [])
+                    table_data = block.get('tableData', [])
+                    table_name = block.get('tableName', 'Table')
+                    
+                    if headers and table_data:
+                        # Create Word table
+                        num_cols = len(headers)
+                        num_rows = len(table_data) + 1  # +1 for header row
+                        
+                        table = doc.add_table(rows=num_rows, cols=num_cols)
+                        table.style = 'Table Grid'
+                        table.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                        
+                        # Set table width to fit content
+                        table.autofit = False
+                        table.allow_autofit = False
+                        
+                        # Add headers
+                        header_row = table.rows[0]
+                        for col_idx, header in enumerate(headers):
+                            cell = header_row.cells[col_idx]
+                            cell.text = sanitize_text(str(header))
+                            
+                            # Format header cell
+                            for paragraph in cell.paragraphs:
+                                paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                                for run in paragraph.runs:
+                                    run.font.name = IEEE_CONFIG['font_name']
+                                    run.font.size = IEEE_CONFIG['font_size_body']
+                                    run.bold = True
+                            
+                            # Set header cell background (light gray)
+                            cell_element = cell._element
+                            cell_properties = cell_element.get_or_add_tcPr()
+                            shading = OxmlElement('w:shd')
+                            shading.set(qn('w:fill'), 'F0F0F0')  # Light gray
+                            cell_properties.append(shading)
+                        
+                        # Add data rows
+                        for row_idx, row_data in enumerate(table_data):
+                            table_row = table.rows[row_idx + 1]  # +1 to skip header
+                            for col_idx, cell_data in enumerate(row_data):
+                                if col_idx < num_cols:  # Ensure we don't exceed column count
+                                    cell = table_row.cells[col_idx]
+                                    cell.text = sanitize_text(str(cell_data))
+                                    
+                                    # Format data cell
+                                    for paragraph in cell.paragraphs:
+                                        paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
+                                        for run in paragraph.runs:
+                                            run.font.name = IEEE_CONFIG['font_name']
+                                            run.font.size = IEEE_CONFIG['font_size_body']
+                        
+                        # Set column widths for better appearance
+                        total_width = IEEE_CONFIG['column_width'] * 2  # Use full column width
+                        col_width = total_width / num_cols
+                        for col in table.columns:
+                            col.width = col_width
+                        
+                        # Add spacing around table
+                        table_para = doc.paragraphs[-1]  # Get the paragraph containing the table
+                        table_para.paragraph_format.space_before = Pt(6)
+                        table_para.paragraph_format.space_after = Pt(6)
+                        
+                        # Generate table caption
+                        table_count = sum(1 for b in content_blocks[:block_idx+1] if b.get('type') == 'table')
+                        caption = doc.add_paragraph(f"Table {section_idx}.{table_count}: {sanitize_text(table_name)}")
+                        caption.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                        caption.paragraph_format.space_before = Pt(0)
+                        caption.paragraph_format.space_after = Pt(12)
+                        if caption.runs:
+                            caption.runs[0].font.name = IEEE_CONFIG['font_name']
+                            caption.runs[0].font.size = IEEE_CONFIG['font_size_caption']
+                            
                 except Exception as e:
-                    print(f"ERROR: Failed to decode table image data: {str(e)}", file=sys.stderr)
-                    continue
-                
-                # Create image stream
-                image_stream = BytesIO(image_bytes)
-                
-                para = doc.add_paragraph()
-                run = para.add_run()
-                # Tables can be wider than figures
-                table_width = IEEE_CONFIG['column_width'] * 1.2
-                picture = run.add_picture(image_stream, width=table_width)
-                if picture.height > IEEE_CONFIG['max_figure_height']:
-                    scale_factor = IEEE_CONFIG['max_figure_height'] / picture.height
-                    run.clear()
-                    run.add_picture(image_stream, width=table_width * scale_factor, height=IEEE_CONFIG['max_figure_height'])
-                
-                para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                para.paragraph_format.space_before = Pt(6)
-                para.paragraph_format.space_after = Pt(6)
-                
-                # Generate table number based on section and table position
-                table_count = sum(1 for b in content_blocks[:block_idx+1] if b.get('type') == 'table')
-                caption = doc.add_paragraph(f"Table {section_idx}.{table_count}: {sanitize_text(block['tableName'])}")
-                caption.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                caption.paragraph_format.space_before = Pt(0)
-                caption.paragraph_format.space_after = Pt(12)
-                if caption.runs:
-                    caption.runs[0].font.name = IEEE_CONFIG['font_name']
-                    caption.runs[0].font.size = IEEE_CONFIG['font_size_caption']
-            except Exception as e:
-                print(f"Error processing table: {e}", file=sys.stderr)
+                    print(f"Error processing interactive table: {e}", file=sys.stderr)
+                    
+            elif table_type == 'latex' and block.get('latexCode'):
+                # Handle LaTeX tables - for now, just add as formatted text
+                try:
+                    latex_code = block.get('latexCode', '')
+                    table_name = block.get('tableName', 'Table')
+                    
+                    # Add LaTeX code as formatted text (could be enhanced with LaTeX rendering)
+                    para = doc.add_paragraph()
+                    run = para.add_run(sanitize_text(latex_code))
+                    run.font.name = 'Courier New'  # Monospace font for code
+                    run.font.size = Pt(9)
+                    para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                    para.paragraph_format.space_before = Pt(6)
+                    para.paragraph_format.space_after = Pt(6)
+                    
+                    # Generate table caption
+                    table_count = sum(1 for b in content_blocks[:block_idx+1] if b.get('type') == 'table')
+                    caption = doc.add_paragraph(f"Table {section_idx}.{table_count}: {sanitize_text(table_name)}")
+                    caption.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                    caption.paragraph_format.space_before = Pt(0)
+                    caption.paragraph_format.space_after = Pt(12)
+                    if caption.runs:
+                        caption.runs[0].font.name = IEEE_CONFIG['font_name']
+                        caption.runs[0].font.size = IEEE_CONFIG['font_size_caption']
+                        
+                except Exception as e:
+                    print(f"Error processing LaTeX table: {e}", file=sys.stderr)
+                    
+            elif block.get('data') and block.get('tableName'):
+                # Handle image tables (existing functionality)
+                import base64
+                try:
+                    image_data = block['data']
+                    
+                    # Handle base64 data - remove prefix if present
+                    if ',' in image_data:
+                        image_data = image_data.split(',')[1]
+                    
+                    # Decode base64 image data
+                    try:
+                        image_bytes = base64.b64decode(image_data)
+                    except Exception as e:
+                        print(f"ERROR: Failed to decode table image data: {str(e)}", file=sys.stderr)
+                        continue
+                    
+                    # Create image stream
+                    image_stream = BytesIO(image_bytes)
+                    
+                    para = doc.add_paragraph()
+                    run = para.add_run()
+                    # Tables can be wider than figures
+                    table_width = IEEE_CONFIG['column_width'] * 1.2
+                    picture = run.add_picture(image_stream, width=table_width)
+                    if picture.height > IEEE_CONFIG['max_figure_height']:
+                        scale_factor = IEEE_CONFIG['max_figure_height'] / picture.height
+                        run.clear()
+                        run.add_picture(image_stream, width=table_width * scale_factor, height=IEEE_CONFIG['max_figure_height'])
+                    
+                    para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                    para.paragraph_format.space_before = Pt(6)
+                    para.paragraph_format.space_after = Pt(6)
+                    
+                    # Generate table number based on section and table position
+                    table_count = sum(1 for b in content_blocks[:block_idx+1] if b.get('type') == 'table')
+                    caption = doc.add_paragraph(f"Table {section_idx}.{table_count}: {sanitize_text(block['tableName'])}")
+                    caption.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                    caption.paragraph_format.space_before = Pt(0)
+                    caption.paragraph_format.space_after = Pt(12)
+                    if caption.runs:
+                        caption.runs[0].font.name = IEEE_CONFIG['font_name']
+                        caption.runs[0].font.size = IEEE_CONFIG['font_size_caption']
+                except Exception as e:
+                    print(f"Error processing table image: {e}", file=sys.stderr)
                 
         elif block.get('type') == 'equation' and block.get('content'):
             # Handle equation blocks
@@ -1231,22 +1343,67 @@ def generate_ieee_html_preview(form_data):
                     </div>
                     '''
                     
-                elif block_type == 'table' and block.get('data') and block.get('tableName'):
-                    # Handle table blocks with images
+                elif block_type == 'table':
+                    # Handle different table types: interactive, image, or latex
+                    table_type = block.get('tableType', 'image')  # Default to image for backward compatibility
                     table_count = sum(1 for b in content_blocks[:content_blocks.index(block)+1] if b.get('type') == 'table')
-                    image_data = block.get('data')
-                    table_name = sanitize_text(block.get('tableName', ''))
+                    table_name = sanitize_text(block.get('tableName', 'Table'))
                     
-                    # Add image with proper base64 format
-                    if not image_data.startswith('data:'):
-                        image_data = f"data:image/png;base64,{image_data}"
-                    
-                    html += f'''
-                    <div class="content-block" style="text-align: center; margin: 15px 0;">
-                        <img src="{image_data}" alt="Table {i}.{table_count}" style="max-width: 90%; height: auto; border: 1px solid #ddd; border-radius: 4px;" />
-                        <div class="figure-caption">Table {i}.{table_count}: {table_name}</div>
-                    </div>
-                    '''
+                    if table_type == 'interactive' and block.get('headers') and block.get('tableData'):
+                        # Handle interactive tables with headers and data
+                        headers = block.get('headers', [])
+                        table_data = block.get('tableData', [])
+                        
+                        if headers and table_data:
+                            # Generate HTML table
+                            table_html = '<table style="border-collapse: collapse; margin: 0 auto; border: 1px solid #333; font-size: 9pt; max-width: 90%;">'
+                            
+                            # Add header row
+                            table_html += '<thead><tr style="background-color: #f0f0f0;">'
+                            for header in headers:
+                                table_html += f'<th style="border: 1px solid #333; padding: 6px 8px; text-align: center; font-weight: bold;">{sanitize_text(str(header))}</th>'
+                            table_html += '</tr></thead>'
+                            
+                            # Add data rows
+                            table_html += '<tbody>'
+                            for row_data in table_data:
+                                table_html += '<tr>'
+                                for cell_data in row_data:
+                                    table_html += f'<td style="border: 1px solid #333; padding: 6px 8px; text-align: left;">{sanitize_text(str(cell_data))}</td>'
+                                table_html += '</tr>'
+                            table_html += '</tbody></table>'
+                            
+                            html += f'''
+                            <div class="content-block" style="text-align: center; margin: 15px 0;">
+                                {table_html}
+                                <div class="figure-caption">Table {i}.{table_count}: {table_name}</div>
+                            </div>
+                            '''
+                            
+                    elif table_type == 'latex' and block.get('latexCode'):
+                        # Handle LaTeX tables - display as formatted code
+                        latex_code = sanitize_text(block.get('latexCode', ''))
+                        html += f'''
+                        <div class="content-block" style="text-align: center; margin: 15px 0;">
+                            <div style="background-color: #f8f8f8; border: 1px solid #ddd; padding: 10px; font-family: 'Courier New', monospace; font-size: 8pt; text-align: left; max-width: 90%; margin: 0 auto; white-space: pre-wrap;">{latex_code}</div>
+                            <div class="figure-caption">Table {i}.{table_count}: {table_name}</div>
+                        </div>
+                        '''
+                        
+                    elif block.get('data') and block.get('tableName'):
+                        # Handle image tables (existing functionality)
+                        image_data = block.get('data')
+                        
+                        # Add image with proper base64 format
+                        if not image_data.startswith('data:'):
+                            image_data = f"data:image/png;base64,{image_data}"
+                        
+                        html += f'''
+                        <div class="content-block" style="text-align: center; margin: 15px 0;">
+                            <img src="{image_data}" alt="Table {i}.{table_count}" style="max-width: 90%; height: auto; border: 1px solid #ddd; border-radius: 4px;" />
+                            <div class="figure-caption">Table {i}.{table_count}: {table_name}</div>
+                        </div>
+                        '''
                     
                 elif block_type == 'equation' and block_content:
                     # Handle equation blocks
