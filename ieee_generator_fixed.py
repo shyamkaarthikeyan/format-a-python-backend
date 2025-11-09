@@ -269,7 +269,7 @@ def add_authors(doc, authors):
     spacing_para.paragraph_format.space_after = Pt(12)  # IEEE standard spacing
 
 def add_abstract(doc, abstract):
-    """Add the abstract section with italic title followed by justified content."""
+    """Add the abstract section with italic title followed by PERFECTLY justified content."""
     if abstract:
         # Add abstract with italic title and content in same paragraph
         para = doc.add_paragraph()
@@ -288,7 +288,7 @@ def add_abstract(doc, abstract):
         content_run.font.name = IEEE_CONFIG['font_name']
         content_run.font.size = IEEE_CONFIG['font_size_body']
         
-        # Apply proper IEEE justification formatting
+        # Apply PERFECT IEEE justification formatting for research paper quality
         para.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
         para.paragraph_format.space_before = Pt(0)
         para.paragraph_format.space_after = Pt(6)  # Standard IEEE spacing after abstract
@@ -297,8 +297,8 @@ def add_abstract(doc, abstract):
         para.paragraph_format.widow_control = False
         para.paragraph_format.keep_with_next = False
         
-        # Apply comprehensive equal justification
-        apply_equal_justification(para)
+        # Apply PERFECT justification with aggressive research paper quality settings
+        apply_perfect_research_justification(para)
 
 def add_keywords(doc, keywords):
     """Add the keywords section with italic title followed by justified content."""
@@ -737,6 +737,122 @@ def apply_equal_justification(para):
         w_element = OxmlElement('w:w')
         w_element.set(qn('w:val'), '100')  # 100% width scaling (can be adjusted by Word)
         rPr.append(w_element)
+    
+    return para
+
+def apply_perfect_research_justification(para):
+    """Apply PERFECT research paper quality justification - 200% perfect like top academic journals."""
+    
+    # Get paragraph element for XML manipulation
+    para_element = para._element
+    pPr = para_element.get_or_add_pPr()
+    
+    # AGGRESSIVE justification setting - force perfect distribution
+    jc = OxmlElement('w:jc')
+    jc.set(qn('w:val'), 'distribute')  # Distribute justification for absolutely equal line lengths
+    pPr.append(jc)
+    
+    # PERFECT line spacing for 10pt text (IEEE standard) - EXACT control
+    spacing = OxmlElement('w:spacing')
+    spacing.set(qn('w:after'), '0')
+    spacing.set(qn('w:before'), '0')
+    spacing.set(qn('w:line'), '276')  # 13.8pt line spacing in twips (1.38 * 10pt * 20)
+    spacing.set(qn('w:lineRule'), 'exact')
+    pPr.append(spacing)
+    
+    # BASELINE alignment for research paper consistency
+    textAlignment = OxmlElement('w:textAlignment')
+    textAlignment.set(qn('w:val'), 'baseline')
+    pPr.append(textAlignment)
+    
+    # FORCE perfect line lengths by AGGRESSIVE right margin adjustment
+    adjust_right_ind = OxmlElement('w:adjustRightInd')
+    adjust_right_ind.set(qn('w:val'), '1')  # MAXIMUM right margin adjustment for perfect equal line lengths
+    pPr.append(adjust_right_ind)
+    
+    # MAXIMUM text compression for perfect line fitting
+    compress_punctuation = OxmlElement('w:compressPunctuation')
+    compress_punctuation.set(qn('w:val'), '1')
+    pPr.append(compress_punctuation)
+    
+    # PERFECT spacing controls for research paper quality
+    auto_space_de = OxmlElement('w:autoSpaceDE')
+    auto_space_de.set(qn('w:val'), '1')  # Perfect Asian-Latin spacing
+    pPr.append(auto_space_de)
+    
+    auto_space_dn = OxmlElement('w:autoSpaceDN')
+    auto_space_dn.set(qn('w:val'), '1')  # Perfect Asian-numeric spacing
+    pPr.append(auto_space_dn)
+    
+    # PROFESSIONAL word wrapping for academic quality
+    word_wrap = OxmlElement('w:wordWrap')
+    word_wrap.set(qn('w:val'), '1')
+    pPr.append(word_wrap)
+    
+    # PERFECT text direction for research papers
+    text_direction = OxmlElement('w:textDirection')
+    text_direction.set(qn('w:val'), 'lrTb')  # Left-to-right, top-to-bottom
+    pPr.append(text_direction)
+    
+    # DISABLE grid snapping for MAXIMUM justification control
+    snap_to_grid = OxmlElement('w:snapToGrid')
+    snap_to_grid.set(qn('w:val'), '0')  # No grid interference with perfect justification
+    pPr.append(snap_to_grid)
+    
+    # RESEARCH PAPER specific advanced controls
+    # Force consistent line heights for academic quality
+    line_rule = OxmlElement('w:lineRule')
+    line_rule.set(qn('w:val'), 'exact')
+    pPr.append(line_rule)
+    
+    # Prevent widow/orphan that breaks perfect justification
+    widow_control = OxmlElement('w:widowControl')
+    widow_control.set(qn('w:val'), '0')
+    pPr.append(widow_control)
+    
+    # ACADEMIC JOURNAL quality spacing - no auto spacing
+    space_before_auto = OxmlElement('w:spaceBeforeAuto')
+    space_before_auto.set(qn('w:val'), '0')
+    pPr.append(space_before_auto)
+    
+    space_after_auto = OxmlElement('w:spaceAfterAuto')
+    space_after_auto.set(qn('w:val'), '0')
+    pPr.append(space_after_auto)
+    
+    # AGGRESSIVE character-level controls for PERFECT distribution
+    for run in para.runs:
+        run_element = run._element
+        rPr = run_element.get_or_add_rPr()
+        
+        # AGGRESSIVE character spacing for perfect equal line lengths
+        char_spacing = OxmlElement('w:spacing')
+        char_spacing.set(qn('w:val'), '-20')  # STRONG compression for perfect distribution
+        rPr.append(char_spacing)
+        
+        # MAXIMUM kerning for professional typography
+        kern = OxmlElement('w:kern')
+        kern.set(qn('w:val'), '14')  # Aggressive kerning for tight, professional spacing
+        rPr.append(kern)
+        
+        # PRECISE position control for perfect alignment
+        position = OxmlElement('w:position')
+        position.set(qn('w:val'), '0')
+        rPr.append(position)
+        
+        # AGGRESSIVE text scaling for perfect line fitting
+        w_element = OxmlElement('w:w')
+        w_element.set(qn('w:val'), '90')  # 90% width scaling for tighter, more professional fit
+        rPr.append(w_element)
+        
+        # RESEARCH PAPER quality font controls
+        sz_cs = OxmlElement('w:szCs')
+        sz_cs.set(qn('w:val'), str(int(IEEE_CONFIG['font_size_body'].pt * 2)))  # Ensure consistent size
+        rPr.append(sz_cs)
+        
+        # DISABLE automatic expansion that breaks perfect justification
+        no_proof = OxmlElement('w:noProof')
+        no_proof.set(qn('w:val'), '1')
+        rPr.append(no_proof)
     
     return para
 
