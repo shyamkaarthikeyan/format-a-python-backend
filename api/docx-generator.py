@@ -66,7 +66,7 @@ class handler(BaseHTTPRequestHandler):
     def do_OPTIONS(self):
         """Handle CORS preflight requests"""
         self.send_response(200)
-        self.send_header('Access-Control-Allow-Origin', 'https://format-a.vercel.app')
+        self.send_header('Access-Control-Allow-Origin', '*')
         self.send_header('Access-Control-Allow-Methods', 'POST, OPTIONS')
         self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization')
         self.send_header('Access-Control-Allow-Credentials', 'true')
@@ -77,7 +77,7 @@ class handler(BaseHTTPRequestHandler):
         try:
             # Set CORS headers first
             self.send_response(200)
-            self.send_header('Access-Control-Allow-Origin', 'https://format-a.vercel.app')
+            self.send_header('Access-Control-Allow-Origin', '*')
             self.send_header('Access-Control-Allow-Methods', 'POST, OPTIONS')
             self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization')
             self.send_header('Access-Control-Allow-Credentials', 'true')
@@ -180,7 +180,7 @@ class handler(BaseHTTPRequestHandler):
         except json.JSONDecodeError as e:
             self.send_response(400)
             self.send_header('Content-Type', 'application/json')
-            self.send_header('Access-Control-Allow-Origin', 'https://format-a.vercel.app')
+            self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
             
             error_response = json.dumps({
@@ -195,7 +195,7 @@ class handler(BaseHTTPRequestHandler):
             
             self.send_response(500)
             self.send_header('Content-Type', 'application/json')
-            self.send_header('Access-Control-Allow-Origin', 'https://format-a.vercel.app')
+            self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
             
             error_response = json.dumps({
