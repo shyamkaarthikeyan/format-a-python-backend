@@ -92,12 +92,37 @@ class handler(BaseHTTPRequestHandler):
                 self.wfile.write(error_response.encode())
                 return
             
-            # Generate the DOCX document
+            # Generate the DOCX document with fallback approach
             print("Generating DOCX document...", file=sys.stderr)
-            docx_bytes = generate_ieee_document(document_data)
             
-            if not docx_bytes or len(docx_bytes) == 0:
-                raise Exception("Generated DOCX document is empty")
+            try:
+                # Try the full IEEE generator first
+                docx_bytes = generate_ieee_document(document_data)
+                
+                if not docx_bytes or len(docx_bytes) == 0:
+                    raise Exception("Generated DOCX document is empty")
+                    
+                print("Full IEEE generator succeeded", file=sys.stderr)
+                
+            except Exception as ieee_error:
+                print(f"IEEE generator failed: {ieee_error}", file=sys.stderr)
+                
+                # Fallback to minimal DOCX generation
+                try:
+                    print("Trying minimal DOCX generation...", file=sys.stderr)
+                    sys.path.insert(0, parent_dir)
+                    from test_minimal_docx import create_minimal_docx
+                    
+                    docx_bytes = create_minimal_docx(document_data)
+                    
+                    if not docx_bytes or len(docx_bytes) == 0:
+                        raise Exception("Minimal DOCX generation also failed")
+                        
+                    print("Minimal DOCX generation succeeded", file=sys.stderr)
+                    
+                except Exception as minimal_error:
+                    print(f"Minimal DOCX generation failed: {minimal_error}", file=sys.stderr)
+                    raise Exception(f"Both IEEE and minimal generation failed: IEEE={ieee_error}, Minimal={minimal_error}")
             
             # Convert to base64 for JSON response
             docx_base64 = base64.b64encode(docx_bytes).decode('utf-8')
