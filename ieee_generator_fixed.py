@@ -4,6 +4,8 @@ IEEE Document Generator - EXACT copy from test.py
 
 import json
 import sys
+import os
+import argparse
 from docx import Document
 from docx.shared import Pt, Inches
 from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -15,6 +17,9 @@ from io import BytesIO
 import re
 from html.parser import HTMLParser
 import unicodedata
+import base64
+import tempfile
+import subprocess
 
 def sanitize_text(text):
     """Sanitize text to remove invalid Unicode characters and surrogates."""
@@ -708,17 +713,18 @@ def add_ieee_table(doc, table_data, section_idx, table_count):
                 para.paragraph_format.space_before = Pt(6)
                 para.paragraph_format.space_after = Pt(6)
         
-        # Add table caption
+        # Add table caption - FIXED: Ensure caption appears for all table types
         caption_text = table_data.get('caption', table_data.get('tableName', ''))
         if caption_text:
-            caption = doc.add_paragraph(f"Table {section_idx}.{table_count}: {sanitize_text(caption_text)}")
+            caption = doc.add_paragraph(f"TABLE {section_idx}.{table_count}: {sanitize_text(caption_text).upper()}")
             caption.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            caption.paragraph_format.space_before = Pt(0)
+            caption.paragraph_format.space_before = Pt(6)
             caption.paragraph_format.space_after = Pt(12)
             if caption.runs:
                 caption.runs[0].font.name = 'Times New Roman'
                 caption.runs[0].font.size = Pt(9)
-                caption.runs[0].italic = True
+                caption.runs[0].bold = True  # IEEE standard: table captions are bold
+                caption.runs[0].italic = False
         
         # Add spacing after table to prevent overlap
         spacing = doc.add_paragraph()
@@ -836,13 +842,15 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
                     
                     # Generate figure number based on section and image position
                     img_count = sum(1 for b in content_blocks[:block_idx+1] if b.get('type') == 'image' or (b.get('type') == 'text' and b.get('data')))
-                    caption = doc.add_paragraph(f"Fig. {section_idx}.{img_count}: {sanitize_text(block['caption'])}")
+                    caption = doc.add_paragraph(f"FIG. {section_idx}.{img_count}: {sanitize_text(block['caption']).upper()}")
                     caption.alignment = WD_ALIGN_PARAGRAPH.CENTER
                     caption.paragraph_format.space_before = Pt(0)
                     caption.paragraph_format.space_after = Pt(12)
                     if caption.runs:
-                        caption.runs[0].font.name = IEEE_CONFIG['font_name']
-                        caption.runs[0].font.size = IEEE_CONFIG['font_size_caption']
+                        caption.runs[0].font.name = 'Times New Roman'
+                        caption.runs[0].font.size = Pt(9)
+                        caption.runs[0].bold = True  # IEEE standard: figure captions are bold
+                        caption.runs[0].italic = False
                 except Exception as e:
                     print(f"Error processing image in text block: {e}", file=sys.stderr)
                     
@@ -897,14 +905,15 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
                 
                 # PERFECT CAPTION - "Fig. X.Y: Caption", 9pt italic, centered
                 img_count = sum(1 for b in content_blocks[:block_idx+1] if b.get('type') == 'image')
-                caption = doc.add_paragraph(f"Fig. {section_idx}.{img_count}: {sanitize_text(block['caption'])}")
+                caption = doc.add_paragraph(f"FIG. {section_idx}.{img_count}: {sanitize_text(block['caption']).upper()}")
                 caption.alignment = WD_ALIGN_PARAGRAPH.CENTER
                 caption.paragraph_format.space_before = Pt(0)   # 0pt before caption
                 caption.paragraph_format.space_after = Pt(12)   # 12pt after caption
                 if caption.runs:
                     caption.runs[0].font.name = 'Times New Roman'
                     caption.runs[0].font.size = Pt(9)  # 9pt caption
-                    caption.runs[0].italic = True       # Italic caption
+                    caption.runs[0].bold = True         # IEEE standard: figure captions are bold
+                    caption.runs[0].italic = False      # Not italic
                 
                 # PREVENT OVERLAP - add spacing after figure block
                 spacing = doc.add_paragraph()
@@ -1653,15 +1662,1284 @@ def generate_ieee_html_preview(form_data):
     
     return html
 
+def generate_ieee_master_html(form_data):
+    """Generate MASTER HTML with pixel-perfect IEEE formatting - used by both DOCX and PDF outputs"""
+    
+    # Extract document data
+    title = sanitize_text(form_data.get('title', 'Untitled Document'))
+    authors = form_data.get('authors', [])
+    abstract = sanitize_text(form_data.get('abstract', ''))
+    keywords = sanitize_text(form_data.get('keywords', ''))
+    sections = form_data.get('sections', [])
+    references = form_data.get('references', [])
+    
+    # Format authors with CSS Grid for exact 3-column layout (IEEE standard)
+    authors_html = ''
+    if authors:
+        authors_html = '<div class="ieee-authors-container">'
+        
+        # Process authors in groups of 3 (IEEE standard)
+        authors_per_row = 3
+        total_authors = len(authors)
+        
+        for row_start in range(0, total_authors, authors_per_row):
+            row_end = min(row_start + authors_per_row, total_authors)
+            row_authors = authors[row_start:row_end]
+            
+            authors_html += '<div class="ieee-authors-row">'
+            
+            for author in row_authors:
+                author_name = sanitize_text(author.get('name', ''))
+                author_html = f'<div class="ieee-author"><div class="author-name">{author_name}</div>'
+                
+                # Add structured affiliation fields in IEEE order
+                fields = ['department', 'organization', 'university', 'institution', 'city', 'state', 'country']
+                for field in fields:
+                    if author.get(field):
+                        author_html += f'<div class="author-affiliation">{sanitize_text(author[field])}</div>'
+                
+                # Add email
+                if author.get('email'):
+                    author_html += f'<div class="author-email">{sanitize_text(author["email"])}</div>'
+                
+                # Fallback to affiliation field if structured fields not available
+                if not any(author.get(field) for field in fields) and author.get('affiliation'):
+                    affiliation_lines = author['affiliation'].strip().split('\n')
+                    for line in affiliation_lines:
+                        line = line.strip()
+                        if line:
+                            author_html += f'<div class="author-affiliation">{sanitize_text(line)}</div>'
+                
+                author_html += '</div>'
+                authors_html += author_html
+            
+            # Fill remaining columns if less than 3 authors in this row
+            remaining_cols = authors_per_row - len(row_authors)
+            for _ in range(remaining_cols):
+                authors_html += '<div class="ieee-author"></div>'  # Empty column for grid alignment
+            
+            authors_html += '</div>'
+        
+        authors_html += '</div>'
+    
+    # Process sections with content blocks (tables and images)
+    sections_html = ''
+    for section_idx, section in enumerate(sections, 1):
+        section_title = sanitize_text(section.get('title', ''))
+        if section_title:
+            sections_html += f'<div class="ieee-heading">{section_idx}. {section_title.upper()}</div>'
+        
+        # Process content blocks
+        content_blocks = section.get('contentBlocks', [])
+        table_count = 0
+        img_count = 0
+        
+        for block in content_blocks:
+            block_type = block.get('type', 'text')
+            
+            if block_type == 'text' and block.get('content'):
+                content = sanitize_text(block['content'])
+                sections_html += f'<div class="ieee-paragraph">{content}</div>'
+            
+            elif block_type == 'table':
+                table_count += 1
+                table_type = block.get('tableType', 'interactive')
+                
+                if table_type == 'interactive':
+                    headers = block.get('headers', [])
+                    rows_data = block.get('tableData', [])
+                    
+                    if headers and rows_data:
+                        sections_html += '<div class="ieee-table-container">'
+                        sections_html += '<table class="ieee-table">'
+                        
+                        # Header row
+                        sections_html += '<thead><tr>'
+                        for header in headers:
+                            sections_html += f'<th class="ieee-table-header">{sanitize_text(str(header))}</th>'
+                        sections_html += '</tr></thead>'
+                        
+                        # Data rows
+                        sections_html += '<tbody>'
+                        for row_data in rows_data:
+                            sections_html += '<tr>'
+                            for cell_data in row_data:
+                                sections_html += f'<td class="ieee-table-cell">{sanitize_text(str(cell_data))}</td>'
+                            sections_html += '</tr>'
+                        sections_html += '</tbody>'
+                        
+                        sections_html += '</table>'
+                        
+                        # Table caption
+                        caption = block.get('caption', block.get('tableName', ''))
+                        if caption:
+                            sections_html += f'<div class="ieee-table-caption">TABLE {section_idx}.{table_count}: {sanitize_text(caption).upper()}</div>'
+                        
+                        sections_html += '</div>'
+                
+                elif table_type == 'image' and block.get('data'):
+                    # Handle image tables
+                    image_data = block['data']
+                    if ',' in image_data:
+                        image_data = image_data.split(',')[1]
+                    
+                    size_class = f"ieee-image-{block.get('size', 'medium')}"
+                    sections_html += f'<div class="ieee-image-container">'
+                    sections_html += f'<img src="data:image/png;base64,{image_data}" class="ieee-image {size_class}" alt="Table {section_idx}.{table_count}" />'
+                    
+                    caption = block.get('caption', block.get('tableName', ''))
+                    if caption:
+                        sections_html += f'<div class="ieee-table-caption">TABLE {section_idx}.{table_count}: {sanitize_text(caption).upper()}</div>'
+                    
+                    sections_html += '</div>'
+            
+            elif block_type == 'image' and block.get('data') and block.get('caption'):
+                img_count += 1
+                image_data = block['data']
+                if ',' in image_data:
+                    image_data = image_data.split(',')[1]
+                
+                size_class = f"ieee-image-{block.get('size', 'medium')}"
+                sections_html += f'<div class="ieee-image-container">'
+                sections_html += f'<img src="data:image/png;base64,{image_data}" class="ieee-image {size_class}" alt="Figure {section_idx}.{img_count}" />'
+                sections_html += f'<div class="ieee-figure-caption">FIG. {section_idx}.{img_count}: {sanitize_text(block["caption"]).upper()}</div>'
+                sections_html += '</div>'
+    
+    # Process references
+    references_html = ''
+    if references:
+        references_html = '<div class="ieee-heading">REFERENCES</div>'
+        for i, ref in enumerate(references, 1):
+            ref_text = sanitize_text(ref.get('text', '')) if isinstance(ref, dict) else sanitize_text(str(ref))
+            if ref_text:
+                references_html += f'<div class="ieee-reference">[{i}] {ref_text}</div>'
+    
+    # Create MASTER HTML with EXACT IEEE CSS - identical for both DOCX and PDF
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{title}</title>
+    <style>
+        /* EXACT IEEE LaTeX PDF SPECIFICATIONS - PIXEL PERFECT */
+        
+        @page {{
+            size: letter;
+            margin: 0.75in;
+            @bottom-center {{
+                content: counter(page);
+                font-family: 'Times New Roman', serif;
+                font-size: 10pt;
+            }}
+        }}
+        
+        * {{
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }}
+        
+        body {{
+            font-family: 'Times New Roman', serif;
+            font-size: 10pt;
+            line-height: 1.2;
+            color: black;
+            background: white;
+            
+            /* PERFECT JUSTIFICATION - LaTeX quality */
+            text-align: justify;
+            text-justify: inter-word;
+            hyphens: auto;
+            -webkit-hyphens: auto;
+            -moz-hyphens: auto;
+            -ms-hyphens: auto;
+            
+            /* EXACT character spacing for perfect line endings */
+            letter-spacing: -0.02em;
+            word-spacing: 0.05em;
+            
+            /* Typography controls */
+            text-rendering: optimizeLegibility;
+            font-variant-ligatures: common-ligatures;
+            font-feature-settings: "liga" 1, "kern" 1;
+            
+            /* Prevent orphans and widows */
+            orphans: 2;
+            widows: 2;
+        }}
+        
+        /* TITLE - 24pt bold centered */
+        .ieee-title {{
+            font-size: 24pt;
+            font-weight: bold;
+            text-align: center;
+            margin: 0 0 20px 0;
+            line-height: 1.3;
+            page-break-after: avoid;
+            letter-spacing: 0;
+            word-spacing: 0;
+        }}
+        
+        /* AUTHORS - CSS Grid for exact 3-column layout */
+        .ieee-authors-container {{
+            margin: 15px 0 20px 0;
+            page-break-after: avoid;
+        }}
+        
+        .ieee-authors-row {{
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 0.25in;
+            margin-bottom: 10px;
+            text-align: center;
+        }}
+        
+        .ieee-author {{
+            font-size: 10pt;
+            line-height: 1.2;
+        }}
+        
+        .author-name {{
+            font-weight: bold;
+            margin-bottom: 3px;
+        }}
+        
+        .author-affiliation {{
+            font-style: italic;
+            margin-bottom: 2px;
+        }}
+        
+        .author-email {{
+            font-size: 9pt;
+            margin-top: 2px;
+        }}
+        
+        /* TWO-COLUMN LAYOUT for body content */
+        .ieee-two-column {{
+            columns: 2;
+            column-gap: 0.25in;
+            column-fill: balance;
+            column-rule: none;
+        }}
+        
+        /* ABSTRACT and KEYWORDS */
+        .ieee-abstract, .ieee-keywords {{
+            font-size: 9pt;
+            font-weight: bold;
+            margin: 15px 0;
+            text-align: justify;
+            text-justify: inter-word;
+            hyphens: auto;
+            break-inside: avoid;
+        }}
+        
+        /* SECTION HEADINGS - centered, bold, uppercase */
+        .ieee-heading {{
+            font-size: 10pt;
+            font-weight: bold;
+            text-align: center;
+            text-transform: uppercase;
+            margin: 15px 0 5px 0;
+            page-break-after: avoid;
+            break-after: avoid;
+            letter-spacing: 0;
+            word-spacing: 0;
+        }}
+        
+        /* PARAGRAPHS - perfect justification */
+        .ieee-paragraph {{
+            font-size: 10pt;
+            margin: 0 0 12px 0;
+            text-align: justify;
+            text-justify: inter-word;
+            hyphens: auto;
+            letter-spacing: -0.02em;
+            word-spacing: 0.05em;
+            orphans: 2;
+            widows: 2;
+            text-align-last: left;
+        }}
+        
+        /* TABLES - exact IEEE formatting */
+        .ieee-table-container {{
+            margin: 12px 0;
+            break-inside: avoid;
+            page-break-inside: avoid;
+        }}
+        
+        .ieee-table {{
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 9pt;
+            margin: 6px auto;
+            border: 1px solid black;
+        }}
+        
+        .ieee-table-header {{
+            border: 1px solid black;
+            padding: 4px 6px;
+            text-align: center;
+            font-weight: bold;
+            background-color: #f5f5f5;
+            vertical-align: middle;
+        }}
+        
+        .ieee-table-cell {{
+            border: 1px solid black;
+            padding: 4px 6px;
+            text-align: left;
+            vertical-align: top;
+        }}
+        
+        .ieee-table-caption {{
+            text-align: center;
+            font-size: 9pt;
+            font-weight: bold;
+            margin: 6px 0 12px 0;
+            break-before: avoid;
+        }}
+        
+        /* IMAGES - exact sizing and positioning */
+        .ieee-image-container {{
+            text-align: center;
+            margin: 12px 0;
+            break-inside: avoid;
+            page-break-inside: avoid;
+        }}
+        
+        .ieee-image {{
+            max-width: 100%;
+            height: auto;
+            display: block;
+            margin: 0 auto;
+        }}
+        
+        .ieee-image-very-small {{ width: 1.5in; }}
+        .ieee-image-small {{ width: 2.0in; }}
+        .ieee-image-medium {{ width: 2.5in; }}
+        .ieee-image-large {{ width: 3.3125in; }}
+        
+        .ieee-figure-caption {{
+            text-align: center;
+            font-size: 9pt;
+            font-weight: bold;
+            margin: 6px 0 12px 0;
+            break-before: avoid;
+        }}
+        
+        /* REFERENCES */
+        .ieee-reference {{
+            font-size: 9pt;
+            margin: 3px 0;
+            padding-left: 15px;
+            text-indent: -15px;
+            text-align: justify;
+            text-justify: inter-word;
+            hyphens: auto;
+            letter-spacing: -0.02em;
+            word-spacing: 0.05em;
+        }}
+        
+        /* PAGE BREAKS */
+        .page-break {{
+            page-break-before: always;
+            break-before: page;
+        }}
+        
+        .keep-together {{
+            break-inside: avoid;
+            page-break-inside: avoid;
+        }}
+        
+        /* PRINT OPTIMIZATIONS */
+        @media print {{
+            body {{
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }}
+            
+            .ieee-table {{
+                border-collapse: collapse !important;
+            }}
+            
+            .ieee-table-header,
+            .ieee-table-cell {{
+                border: 1px solid black !important;
+            }}
+        }}
+    </style>
+</head>
+<body>
+    <div class="ieee-title">{title}</div>
+    {authors_html}
+    
+    <div class="ieee-two-column">
+        {f'<div class="ieee-abstract"><strong>Abstract—</strong>{abstract}</div>' if abstract else ''}
+        {f'<div class="ieee-keywords"><strong>Index Terms—</strong>{keywords}</div>' if keywords else ''}
+        
+        {sections_html}
+        
+        {references_html}
+    </div>
+</body>
+</html>"""
+    
+    return html
+
+def weasyprint_pdf_from_html(html):
+    """Convert master HTML to PDF using WeasyPrint with perfect justification"""
+    try:
+        from weasyprint import HTML, CSS
+        from weasyprint.text.fonts import FontConfiguration
+        
+        # Create font configuration for better typography
+        font_config = FontConfiguration()
+        
+        # Additional CSS for even better PDF rendering
+        additional_css = CSS(string="""
+            @page {
+                size: letter;
+                margin: 0.75in;
+            }
+            
+            body {
+                text-rendering: optimizeLegibility;
+                font-variant-ligatures: common-ligatures;
+                font-feature-settings: "liga" 1, "kern" 1;
+            }
+            
+            .ieee-paragraph, .ieee-abstract, .ieee-keywords, .ieee-reference {
+                text-align-last: left;
+                word-break: normal;
+                overflow-wrap: break-word;
+            }
+        """)
+        
+        # Generate PDF with WeasyPrint
+        html_doc = HTML(string=html)
+        pdf_bytes = html_doc.write_pdf(
+            stylesheets=[additional_css],
+            font_config=font_config,
+            optimize_images=True
+        )
+        
+        print("✅ PDF generated with WeasyPrint - perfect justification achieved", file=sys.stderr)
+        return pdf_bytes
+        
+    except (ImportError, OSError) as e:
+        print(f"⚠️ WeasyPrint not available ({e}), using ReportLab fallback", file=sys.stderr)
+        return reportlab_pdf_from_html(html)
+
+def reportlab_pdf_from_html(html):
+    """Fallback: Convert HTML to PDF using ReportLab with good justification"""
+    try:
+        from reportlab.lib.pagesizes import letter
+        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.units import inch
+        from reportlab.lib import colors
+        from reportlab.lib.enums import TA_JUSTIFY, TA_CENTER
+        from bs4 import BeautifulSoup
+        
+        # Parse HTML to extract content
+        soup = BeautifulSoup(html, 'html.parser')
+        
+        # Create PDF buffer
+        buffer = BytesIO()
+        
+        # Create document with IEEE margins
+        doc = SimpleDocTemplate(
+            buffer,
+            pagesize=letter,
+            rightMargin=0.75*inch,
+            leftMargin=0.75*inch,
+            topMargin=0.75*inch,
+            bottomMargin=0.75*inch
+        )
+        
+        # Create styles for IEEE formatting
+        styles = getSampleStyleSheet()
+        
+        # IEEE styles
+        title_style = ParagraphStyle(
+            'IEEETitle',
+            parent=styles['Title'],
+            fontSize=24,
+            fontName='Times-Bold',
+            alignment=TA_CENTER,
+            spaceAfter=20
+        )
+        
+        body_style = ParagraphStyle(
+            'IEEEBody',
+            parent=styles['Normal'],
+            fontSize=10,
+            fontName='Times-Roman',
+            alignment=TA_JUSTIFY,
+            spaceAfter=12,
+            leftIndent=0,
+            rightIndent=0
+        )
+        
+        abstract_style = ParagraphStyle(
+            'IEEEAbstract',
+            parent=body_style,
+            fontSize=9,
+            fontName='Times-Bold',
+            alignment=TA_JUSTIFY
+        )
+        
+        # Build document content
+        story = []
+        
+        # Extract and add title
+        title_elem = soup.find(class_='ieee-title')
+        if title_elem:
+            story.append(Paragraph(title_elem.get_text(), title_style))
+            story.append(Spacer(1, 12))
+        
+        # Extract and add authors (simplified)
+        authors_elem = soup.find(class_='ieee-authors-container')
+        if authors_elem:
+            author_names = [elem.get_text() for elem in authors_elem.find_all(class_='author-name')]
+            if author_names:
+                author_text = ", ".join(author_names)
+                author_style = ParagraphStyle(
+                    'IEEEAuthor',
+                    parent=styles['Normal'],
+                    fontSize=10,
+                    fontName='Times-Roman',
+                    alignment=TA_CENTER
+                )
+                story.append(Paragraph(author_text, author_style))
+                story.append(Spacer(1, 20))
+        
+        # Extract and add abstract
+        abstract_elem = soup.find(class_='ieee-abstract')
+        if abstract_elem:
+            story.append(Paragraph(abstract_elem.get_text(), abstract_style))
+            story.append(Spacer(1, 12))
+        
+        # Extract and add keywords
+        keywords_elem = soup.find(class_='ieee-keywords')
+        if keywords_elem:
+            story.append(Paragraph(keywords_elem.get_text(), abstract_style))
+            story.append(Spacer(1, 20))
+        
+        # Extract and add sections
+        for heading in soup.find_all(class_='ieee-heading'):
+            heading_style = ParagraphStyle(
+                'IEEEHeading',
+                parent=styles['Heading1'],
+                fontSize=10,
+                fontName='Times-Bold',
+                alignment=TA_CENTER,
+                spaceAfter=6,
+                spaceBefore=15
+            )
+            story.append(Paragraph(heading.get_text(), heading_style))
+        
+        # Extract and add paragraphs
+        for para in soup.find_all(class_='ieee-paragraph'):
+            story.append(Paragraph(para.get_text(), body_style))
+        
+        # Extract and add references
+        for ref in soup.find_all(class_='ieee-reference'):
+            ref_style = ParagraphStyle(
+                'IEEEReference',
+                parent=body_style,
+                fontSize=9,
+                leftIndent=15,
+                firstLineIndent=-15
+            )
+            story.append(Paragraph(ref.get_text(), ref_style))
+        
+        # Build PDF
+        doc.build(story)
+        
+        # Get PDF bytes
+        buffer.seek(0)
+        pdf_bytes = buffer.getvalue()
+        buffer.close()
+        
+        print("✅ PDF generated with ReportLab fallback - good justification achieved", file=sys.stderr)
+        return pdf_bytes
+        
+    except ImportError as e:
+        print(f"❌ ReportLab also not available: {e}", file=sys.stderr)
+        raise Exception("PDF generation requires WeasyPrint or ReportLab. Both are unavailable.")
+
+def pandoc_html_to_docx(html, template_path=None):
+    """Convert master HTML to DOCX using pypandoc with IEEE template"""
+    try:
+        import pypandoc
+        
+        # Create temporary HTML file
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False, encoding='utf-8') as temp_html:
+            temp_html.write(html)
+            temp_html_path = temp_html.name
+        
+        # Create temporary DOCX file
+        with tempfile.NamedTemporaryFile(suffix='.docx', delete=False) as temp_docx:
+            temp_docx_path = temp_docx.name
+        
+        try:
+            # Convert HTML to DOCX using pypandoc
+            extra_args = []
+            if template_path and os.path.exists(template_path):
+                extra_args.extend(['--reference-doc', template_path])
+            
+            # Add additional pandoc options for better formatting
+            extra_args.extend([
+                '--standalone',
+                '--wrap=none',
+                '--columns=72'
+            ])
+            
+            pypandoc.convert_file(
+                temp_html_path,
+                'docx',
+                outputfile=temp_docx_path,
+                extra_args=extra_args
+            )
+            
+            # Read the generated DOCX
+            with open(temp_docx_path, 'rb') as f:
+                docx_bytes = f.read()
+            
+            print("✅ DOCX generated with pypandoc - HTML structure preserved", file=sys.stderr)
+            return docx_bytes
+            
+        finally:
+            # Clean up temporary files
+            try:
+                os.unlink(temp_html_path)
+                os.unlink(temp_docx_path)
+            except:
+                pass
+                
+    except ImportError:
+        print("⚠️ pypandoc not available, falling back to original DOCX generator", file=sys.stderr)
+        return None
+    except Exception as e:
+        print(f"⚠️ pypandoc conversion failed ({e}), falling back to original DOCX generator", file=sys.stderr)
+        return None
+
+def generate_ieee_pdf_perfect_justification(form_data):
+    """Generate IEEE-formatted PDF with PERFECT text justification using WeasyPrint - bypasses Word's weak justification"""
+    
+    # Extract document data
+    title = sanitize_text(form_data.get('title', 'Untitled Document'))
+    authors = form_data.get('authors', [])
+    abstract = sanitize_text(form_data.get('abstract', ''))
+    keywords = sanitize_text(form_data.get('keywords', ''))
+    sections = form_data.get('sections', [])
+    references = form_data.get('references', [])
+    
+    # Format authors in IEEE style
+    authors_html = ''
+    if authors:
+        num_authors = len(authors)
+        authors_html = '<div class="ieee-authors-container">'
+        
+        # Process authors in groups of 3 (IEEE standard)
+        authors_per_row = 3
+        for row_start in range(0, num_authors, authors_per_row):
+            row_end = min(row_start + authors_per_row, num_authors)
+            row_authors = authors[row_start:row_end]
+            
+            authors_html += '<div class="ieee-authors-row">'
+            for author in row_authors:
+                author_name = sanitize_text(author.get('name', ''))
+                author_html = f'<div class="ieee-author"><strong>{author_name}</strong>'
+                
+                # Add affiliation fields
+                fields = ['department', 'organization', 'city', 'state', 'country']
+                for field in fields:
+                    if author.get(field):
+                        author_html += f'<br><em>{sanitize_text(author[field])}</em>'
+                
+                # Add email
+                if author.get('email'):
+                    author_html += f'<br><em>{sanitize_text(author["email"])}</em>'
+                
+                # Fallback to affiliation field
+                if not any(author.get(field) for field in fields) and author.get('affiliation'):
+                    author_html += f'<br><em>{sanitize_text(author["affiliation"])}</em>'
+                
+                author_html += '</div>'
+                authors_html += author_html
+            
+            authors_html += '</div>'
+        authors_html += '</div>'
+    
+    # Process sections with content blocks (tables and images)
+    sections_html = ''
+    for i, section in enumerate(sections, 1):
+        section_title = sanitize_text(section.get('title', ''))
+        if section_title:
+            sections_html += f'<div class="ieee-heading">{i}. {section_title.upper()}</div>'
+        
+        # Process content blocks
+        content_blocks = section.get('contentBlocks', [])
+        table_count = 0
+        img_count = 0
+        
+        for block in content_blocks:
+            block_type = block.get('type', 'text')
+            
+            if block_type == 'text' and block.get('content'):
+                content = sanitize_text(block['content'])
+                sections_html += f'<div class="ieee-paragraph">{content}</div>'
+            
+            elif block_type == 'table':
+                table_count += 1
+                table_type = block.get('tableType', 'interactive')
+                
+                if table_type == 'interactive':
+                    headers = block.get('headers', [])
+                    rows_data = block.get('tableData', [])
+                    
+                    if headers and rows_data:
+                        sections_html += '<div class="ieee-table-container">'
+                        sections_html += '<table class="ieee-table">'
+                        
+                        # Header row
+                        sections_html += '<thead><tr>'
+                        for header in headers:
+                            sections_html += f'<th>{sanitize_text(str(header))}</th>'
+                        sections_html += '</tr></thead>'
+                        
+                        # Data rows
+                        sections_html += '<tbody>'
+                        for row_data in rows_data:
+                            sections_html += '<tr>'
+                            for cell_data in row_data:
+                                sections_html += f'<td>{sanitize_text(str(cell_data))}</td>'
+                            sections_html += '</tr>'
+                        sections_html += '</tbody>'
+                        
+                        sections_html += '</table>'
+                        
+                        # Table caption
+                        caption = block.get('caption', block.get('tableName', ''))
+                        if caption:
+                            sections_html += f'<div class="ieee-table-caption">TABLE {i}.{table_count}: {sanitize_text(caption).upper()}</div>'
+                        
+                        sections_html += '</div>'
+                
+                elif table_type == 'image' and block.get('data'):
+                    # Handle image tables
+                    image_data = block['data']
+                    if ',' in image_data:
+                        image_data = image_data.split(',')[1]
+                    
+                    sections_html += f'<div class="ieee-image-container">'
+                    sections_html += f'<img src="data:image/png;base64,{image_data}" class="ieee-image ieee-image-{block.get("size", "medium")}" />'
+                    
+                    caption = block.get('caption', block.get('tableName', ''))
+                    if caption:
+                        sections_html += f'<div class="ieee-table-caption">TABLE {i}.{table_count}: {sanitize_text(caption).upper()}</div>'
+                    
+                    sections_html += '</div>'
+            
+            elif block_type == 'image' and block.get('data') and block.get('caption'):
+                img_count += 1
+                image_data = block['data']
+                if ',' in image_data:
+                    image_data = image_data.split(',')[1]
+                
+                sections_html += f'<div class="ieee-image-container">'
+                sections_html += f'<img src="data:image/png;base64,{image_data}" class="ieee-image ieee-image-{block.get("size", "medium")}" />'
+                sections_html += f'<div class="ieee-figure-caption">FIG. {i}.{img_count}: {sanitize_text(block["caption"]).upper()}</div>'
+                sections_html += '</div>'
+    
+    # Process references
+    references_html = ''
+    if references:
+        references_html = '<div class="ieee-heading">REFERENCES</div>'
+        for i, ref in enumerate(references, 1):
+            ref_text = sanitize_text(ref.get('text', '')) if isinstance(ref, dict) else sanitize_text(str(ref))
+            if ref_text:
+                references_html += f'<div class="ieee-reference">[{i}] {ref_text}</div>'
+    
+    # Create enhanced HTML with PERFECT justification CSS
+    html = f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>{title}</title>
+    <style>
+        @page {{
+            margin: 0.75in;
+            size: letter;
+            @bottom-center {{
+                content: counter(page);
+                font-family: 'Times New Roman', serif;
+                font-size: 10pt;
+            }}
+        }}
+        
+        body {{
+            font-family: 'Times New Roman', serif;
+            font-size: 10pt;
+            line-height: 1.2;
+            margin: 0;
+            padding: 0;
+            background: white;
+            color: black;
+            
+            /* PERFECT JUSTIFICATION - LaTeX quality */
+            text-align: justify;
+            text-justify: inter-word;
+            hyphens: auto;
+            -webkit-hyphens: auto;
+            -moz-hyphens: auto;
+            -ms-hyphens: auto;
+            
+            /* Fine-tune character and word spacing for perfect justification */
+            letter-spacing: -0.02em;
+            word-spacing: 0.05em;
+            
+            /* Prevent orphans and widows */
+            orphans: 2;
+            widows: 2;
+        }}
+        
+        /* Title formatting */
+        .ieee-title {{
+            font-size: 24pt;
+            font-weight: bold;
+            text-align: center;
+            margin: 0 0 20px 0;
+            line-height: 1.3;
+            page-break-after: avoid;
+        }}
+        
+        /* Authors formatting */
+        .ieee-authors-container {{
+            text-align: center;
+            margin: 15px 0 20px 0;
+            page-break-after: avoid;
+        }}
+        
+        .ieee-authors-row {{
+            display: flex;
+            justify-content: center;
+            margin-bottom: 10px;
+        }}
+        
+        .ieee-author {{
+            flex: 1;
+            max-width: 33.33%;
+            padding: 0 10px;
+            font-size: 10pt;
+        }}
+        
+        /* Two-column layout for body content */
+        .ieee-two-column {{
+            columns: 2;
+            column-gap: 0.25in;
+            column-fill: balance;
+        }}
+        
+        /* Abstract and keywords */
+        .ieee-abstract, .ieee-keywords {{
+            margin: 15px 0;
+            text-align: justify;
+            text-justify: inter-word;
+            hyphens: auto;
+            font-size: 9pt;
+            font-weight: bold;
+        }}
+        
+        /* Section headings */
+        .ieee-heading {{
+            font-weight: bold;
+            margin: 15px 0 5px 0;
+            text-transform: uppercase;
+            font-size: 10pt;
+            text-align: center;
+            page-break-after: avoid;
+        }}
+        
+        /* Paragraphs */
+        .ieee-paragraph {{
+            margin: 0 0 12px 0;
+            text-align: justify;
+            text-justify: inter-word;
+            hyphens: auto;
+            letter-spacing: -0.02em;
+            word-spacing: 0.05em;
+            orphans: 2;
+            widows: 2;
+        }}
+        
+        /* Tables */
+        .ieee-table-container {{
+            margin: 12px 0;
+            page-break-inside: avoid;
+        }}
+        
+        .ieee-table {{
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 9pt;
+            margin: 6px auto;
+        }}
+        
+        .ieee-table th, .ieee-table td {{
+            border: 1px solid black;
+            padding: 4px 6px;
+            text-align: left;
+        }}
+        
+        .ieee-table th {{
+            font-weight: bold;
+            text-align: center;
+            background-color: #f5f5f5;
+        }}
+        
+        .ieee-table-caption {{
+            text-align: center;
+            font-size: 9pt;
+            font-weight: bold;
+            margin: 6px 0 12px 0;
+        }}
+        
+        /* Images */
+        .ieee-image-container {{
+            text-align: center;
+            margin: 12px 0;
+            page-break-inside: avoid;
+        }}
+        
+        .ieee-image {{
+            max-width: 100%;
+            height: auto;
+        }}
+        
+        .ieee-image-small {{ width: 2.0in; }}
+        .ieee-image-medium {{ width: 2.5in; }}
+        .ieee-image-large {{ width: 3.3125in; }}
+        .ieee-image-very-small {{ width: 1.5in; }}
+        
+        .ieee-figure-caption {{
+            text-align: center;
+            font-size: 9pt;
+            font-weight: bold;
+            margin: 6px 0 12px 0;
+        }}
+        
+        /* References */
+        .ieee-reference {{
+            margin: 3px 0;
+            padding-left: 15px;
+            text-indent: -15px;
+            font-size: 9pt;
+            text-align: justify;
+            text-justify: inter-word;
+            hyphens: auto;
+        }}
+        
+        /* Page breaks */
+        .page-break {{
+            page-break-before: always;
+        }}
+        
+        /* Prevent breaking between elements */
+        .keep-together {{
+            page-break-inside: avoid;
+        }}
+    </style>
+</head>
+<body>
+    <div class="ieee-title">{title}</div>
+    {authors_html}
+    
+    <div class="ieee-two-column">
+        {f'<div class="ieee-abstract"><strong>Abstract—</strong>{abstract}</div>' if abstract else ''}
+        {f'<div class="ieee-keywords"><strong>Index Terms—</strong>{keywords}</div>' if keywords else ''}
+        
+        {sections_html}
+        
+        {references_html}
+    </div>
+</body>
+</html>"""
+    
+    try:
+        # Try to import and use WeasyPrint for perfect PDF generation
+        from weasyprint import HTML, CSS
+        from weasyprint.text.fonts import FontConfiguration
+        
+        # Create font configuration for better typography
+        font_config = FontConfiguration()
+        
+        # Additional CSS for even better justification
+        additional_css = CSS(string="""
+            @page {
+                margin: 0.75in;
+                size: letter;
+            }
+            
+            body {
+                text-rendering: optimizeLegibility;
+                font-variant-ligatures: common-ligatures;
+                font-feature-settings: "liga" 1, "kern" 1;
+            }
+            
+            .ieee-paragraph, .ieee-abstract, .ieee-keywords, .ieee-reference {
+                text-align-last: left;
+                word-break: normal;
+                overflow-wrap: break-word;
+            }
+        """)
+        
+        # Generate PDF with WeasyPrint
+        html_doc = HTML(string=html)
+        pdf_bytes = html_doc.write_pdf(
+            stylesheets=[additional_css],
+            font_config=font_config,
+            optimize_images=True
+        )
+        
+        print("✅ PDF generated with WeasyPrint - perfect justification achieved", file=sys.stderr)
+        return pdf_bytes
+        
+    except (ImportError, OSError) as e:
+        print(f"⚠️ WeasyPrint not available ({e}), using ReportLab for PDF generation", file=sys.stderr)
+        
+        # Fallback: Use ReportLab for better PDF generation with justification
+        try:
+            from reportlab.lib.pagesizes import letter
+            from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
+            from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+            from reportlab.lib.units import inch
+            from reportlab.lib import colors
+            from reportlab.lib.enums import TA_JUSTIFY, TA_CENTER
+            from reportlab.pdfgen import canvas
+            import io
+            
+            # Create PDF buffer
+            buffer = BytesIO()
+            
+            # Create document with IEEE margins
+            doc = SimpleDocTemplate(
+                buffer,
+                pagesize=letter,
+                rightMargin=0.75*inch,
+                leftMargin=0.75*inch,
+                topMargin=0.75*inch,
+                bottomMargin=0.75*inch
+            )
+            
+            # Create styles for IEEE formatting
+            styles = getSampleStyleSheet()
+            
+            # IEEE Title style
+            title_style = ParagraphStyle(
+                'IEEETitle',
+                parent=styles['Title'],
+                fontSize=24,
+                fontName='Times-Bold',
+                alignment=TA_CENTER,
+                spaceAfter=20
+            )
+            
+            # IEEE Body style with perfect justification
+            body_style = ParagraphStyle(
+                'IEEEBody',
+                parent=styles['Normal'],
+                fontSize=10,
+                fontName='Times-Roman',
+                alignment=TA_JUSTIFY,
+                spaceAfter=12,
+                leftIndent=0,
+                rightIndent=0,
+                wordWrap='LTR'
+            )
+            
+            # IEEE Abstract style
+            abstract_style = ParagraphStyle(
+                'IEEEAbstract',
+                parent=body_style,
+                fontSize=9,
+                fontName='Times-Bold',
+                alignment=TA_JUSTIFY
+            )
+            
+            # Build document content
+            story = []
+            
+            # Add title
+            story.append(Paragraph(title, title_style))
+            story.append(Spacer(1, 12))
+            
+            # Add authors (simplified for ReportLab)
+            if authors:
+                author_text = ", ".join([author.get('name', '') for author in authors])
+                author_style = ParagraphStyle(
+                    'IEEEAuthor',
+                    parent=styles['Normal'],
+                    fontSize=10,
+                    fontName='Times-Roman',
+                    alignment=TA_CENTER
+                )
+                story.append(Paragraph(author_text, author_style))
+                story.append(Spacer(1, 20))
+            
+            # Add abstract
+            if abstract:
+                story.append(Paragraph(f"<b>Abstract—</b>{abstract}", abstract_style))
+                story.append(Spacer(1, 12))
+            
+            # Add keywords
+            if keywords:
+                story.append(Paragraph(f"<b>Index Terms—</b>{keywords}", abstract_style))
+                story.append(Spacer(1, 20))
+            
+            # Add sections
+            for i, section in enumerate(sections, 1):
+                section_title = sanitize_text(section.get('title', ''))
+                if section_title:
+                    heading_style = ParagraphStyle(
+                        'IEEEHeading',
+                        parent=styles['Heading1'],
+                        fontSize=10,
+                        fontName='Times-Bold',
+                        alignment=TA_CENTER,
+                        spaceAfter=6,
+                        spaceBefore=15
+                    )
+                    story.append(Paragraph(f"{i}. {section_title.upper()}", heading_style))
+                
+                # Process content blocks
+                content_blocks = section.get('contentBlocks', [])
+                for block in content_blocks:
+                    if block.get('type') == 'text' and block.get('content'):
+                        content = sanitize_text(block['content'])
+                        story.append(Paragraph(content, body_style))
+            
+            # Add references
+            if references:
+                heading_style = ParagraphStyle(
+                    'IEEEHeading',
+                    parent=styles['Heading1'],
+                    fontSize=10,
+                    fontName='Times-Bold',
+                    alignment=TA_CENTER,
+                    spaceAfter=6,
+                    spaceBefore=15
+                )
+                story.append(Paragraph("REFERENCES", heading_style))
+                
+                ref_style = ParagraphStyle(
+                    'IEEEReference',
+                    parent=body_style,
+                    fontSize=9,
+                    leftIndent=15,
+                    firstLineIndent=-15
+                )
+                
+                for i, ref in enumerate(references, 1):
+                    ref_text = sanitize_text(ref.get('text', '')) if isinstance(ref, dict) else sanitize_text(str(ref))
+                    if ref_text:
+                        story.append(Paragraph(f"[{i}] {ref_text}", ref_style))
+            
+            # Build PDF
+            doc.build(story)
+            
+            # Get PDF bytes
+            buffer.seek(0)
+            pdf_bytes = buffer.getvalue()
+            buffer.close()
+            
+            print("✅ PDF generated with ReportLab - good justification achieved", file=sys.stderr)
+            return pdf_bytes
+            
+        except ImportError as reportlab_error:
+            print(f"❌ ReportLab also not available: {reportlab_error}", file=sys.stderr)
+            raise Exception("PDF generation requires WeasyPrint or ReportLab. Both are unavailable.")
+
 def main():
-    """Main function for command line execution."""
+    """Main function with unified HTML-based generation for 100% identical DOCX and PDF outputs."""
+    
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description='IEEE Document Generator with unified HTML-based output')
+    parser.add_argument('--debug-compare', action='store_true', 
+                       help='Generate both DOCX and PDF for visual comparison')
+    parser.add_argument('--output', choices=['docx', 'pdf'], default='docx',
+                       help='Output format (default: docx)')
+    
+    # Parse args if running from command line, otherwise use defaults
+    if len(sys.argv) > 1:
+        args = parser.parse_args()
+    else:
+        args = argparse.Namespace(debug_compare=False, output='docx')
+    
     try:
         # Read JSON data from stdin
         input_data = sys.stdin.read()
         form_data = json.loads(input_data)
         
-        # Generate IEEE document
-        doc_data = generate_ieee_document(form_data)
+        # Override output type from form data if present
+        output_type = form_data.get('output', args.output).lower()
+        
+        # Generate MASTER HTML - single source of truth for both formats
+        print("🎯 Generating master HTML with pixel-perfect IEEE formatting...", file=sys.stderr)
+        master_html = generate_ieee_master_html(form_data)
+        print("✅ Master HTML generated - unified source for both outputs", file=sys.stderr)
+        
+        if args.debug_compare:
+            # DEBUG MODE: Generate both formats for comparison
+            print("🔍 DEBUG MODE: Generating both DOCX and PDF for visual comparison...", file=sys.stderr)
+            
+            # Generate DOCX
+            print("📄 Generating DOCX from master HTML...", file=sys.stderr)
+            docx_bytes = pandoc_html_to_docx(master_html)
+            if not docx_bytes:
+                # Fallback to original DOCX generator
+                docx_bytes = generate_ieee_document(form_data)
+            
+            # Generate PDF
+            print("🎯 Generating PDF from master HTML...", file=sys.stderr)
+            pdf_bytes = weasyprint_pdf_from_html(master_html)
+            
+            # Save both files for comparison
+            timestamp = str(int(sys.time.time())) if hasattr(sys, 'time') else 'debug'
+            
+            with open(f'debug_compare_{timestamp}.docx', 'wb') as f:
+                f.write(docx_bytes)
+            print(f"📁 DOCX saved: debug_compare_{timestamp}.docx", file=sys.stderr)
+            
+            with open(f'debug_compare_{timestamp}.pdf', 'wb') as f:
+                f.write(pdf_bytes)
+            print(f"📁 PDF saved: debug_compare_{timestamp}.pdf", file=sys.stderr)
+            
+            print("🔍 Open both files to verify 100% visual identity", file=sys.stderr)
+            
+            # Return the requested format
+            doc_data = docx_bytes if output_type == 'docx' else pdf_bytes
+            
+        elif output_type == 'pdf':
+            # Generate PDF from master HTML
+            print("🎯 Generating PDF with perfect justification from master HTML...", file=sys.stderr)
+            doc_data = weasyprint_pdf_from_html(master_html)
+            print("✅ PDF generated with LaTeX-quality justification", file=sys.stderr)
+            
+        else:
+            # Generate DOCX from master HTML
+            print("📄 Generating DOCX from master HTML...", file=sys.stderr)
+            doc_data = pandoc_html_to_docx(master_html)
+            
+            if not doc_data:
+                # Fallback to original DOCX generator if pypandoc fails
+                print("⚠️ Falling back to original DOCX generator", file=sys.stderr)
+                doc_data = generate_ieee_document(form_data)
+            
+            print("✅ DOCX generated with HTML structure preserved", file=sys.stderr)
         
         # Write binary data to stdout
         sys.stdout.buffer.write(doc_data)

@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Unified HTML-Based IEEE Document Generation: Achieving 100% Visual Identity Between DOCX and PDF Outputs</title>
+    <style>
+        /* EXACT IEEE LaTeX PDF SPECIFICATIONS - PIXEL PERFECT */
+        
+        @page {
+            size: letter;
+            margin: 0.75in;
+            @bottom-center {
+                content: counter(page);
+                font-family: 'Times New Roman', serif;
+                font-size: 10pt;
+            }
+        }
+        
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        body {
+            font-family: 'Times New Roman', serif;
+            font-size: 10pt;
+            line-height: 1.2;
+            color: black;
+            background: white;
+            
+            /* PERFECT JUSTIFICATION - LaTeX quality */
+            text-align: justify;
+            text-justify: inter-word;
+            hyphens: auto;
+            -webkit-hyphens: auto;
+            -moz-hyphens: auto;
+            -ms-hyphens: auto;
+            
+            /* EXACT character spacing for perfect line endings */
+            letter-spacing: -0.02em;
+            word-spacing: 0.05em;
+            
+            /* Typography controls */
+            text-rendering: optimizeLegibility;
+            font-variant-ligatures: common-ligatures;
+            font-feature-settings: "liga" 1, "kern" 1;
+            
+            /* Prevent orphans and widows */
+            orphans: 2;
+            widows: 2;
+        }
+        
+        /* TITLE - 24pt bold centered */
+        .ieee-title {
+            font-size: 24pt;
+            font-weight: bold;
+            text-align: center;
+            margin: 0 0 20px 0;
+            line-height: 1.3;
+            page-break-after: avoid;
+            letter-spacing: 0;
+            word-spacing: 0;
+        }
+        
+        /* AUTHORS - CSS Grid for exact 3-column layout */
+        .ieee-authors-container {
+            margin: 15px 0 20px 0;
+            page-break-after: avoid;
+        }
+        
+        .ieee-authors-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 0.25in;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+        
+        .ieee-author {
+            font-size: 10pt;
+            line-height: 1.2;
+        }
+        
+        .author-name {
+            font-weight: bold;
+            margin-bottom: 3px;
+        }
+        
+        .author-affiliation {
+            font-style: italic;
+            margin-bottom: 2px;
+        }
+        
+        .author-email {
+            font-size: 9pt;
+            margin-top: 2px;
+        }
+        
+        /* TWO-COLUMN LAYOUT for body content */
+        .ieee-two-column {
+            columns: 2;
+            column-gap: 0.25in;
+            column-fill: balance;
+            column-rule: none;
+        }
+        
+        /* ABSTRACT and KEYWORDS */
+        .ieee-abstract, .ieee-keywords {
+            font-size: 9pt;
+            font-weight: bold;
+            margin: 15px 0;
+            text-align: justify;
+            text-justify: inter-word;
+            hyphens: auto;
+            break-inside: avoid;
+        }
+        
+        /* SECTION HEADINGS - centered, bold, uppercase */
+        .ieee-heading {
+            font-size: 10pt;
+            font-weight: bold;
+            text-align: center;
+            text-transform: uppercase;
+            margin: 15px 0 5px 0;
+            page-break-after: avoid;
+            break-after: avoid;
+            letter-spacing: 0;
+            word-spacing: 0;
+        }
+        
+        /* PARAGRAPHS - perfect justification */
+        .ieee-paragraph {
+            font-size: 10pt;
+            margin: 0 0 12px 0;
+            text-align: justify;
+            text-justify: inter-word;
+            hyphens: auto;
+            letter-spacing: -0.02em;
+            word-spacing: 0.05em;
+            orphans: 2;
+            widows: 2;
+            text-align-last: left;
+        }
+        
+        /* TABLES - exact IEEE formatting */
+        .ieee-table-container {
+            margin: 12px 0;
+            break-inside: avoid;
+            page-break-inside: avoid;
+        }
+        
+        .ieee-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 9pt;
+            margin: 6px auto;
+            border: 1px solid black;
+        }
+        
+        .ieee-table-header {
+            border: 1px solid black;
+            padding: 4px 6px;
+            text-align: center;
+            font-weight: bold;
+            background-color: #f5f5f5;
+            vertical-align: middle;
+        }
+        
+        .ieee-table-cell {
+            border: 1px solid black;
+            padding: 4px 6px;
+            text-align: left;
+            vertical-align: top;
+        }
+        
+        .ieee-table-caption {
+            text-align: center;
+            font-size: 9pt;
+            font-weight: bold;
+            margin: 6px 0 12px 0;
+            break-before: avoid;
+        }
+        
+        /* IMAGES - exact sizing and positioning */
+        .ieee-image-container {
+            text-align: center;
+            margin: 12px 0;
+            break-inside: avoid;
+            page-break-inside: avoid;
+        }
+        
+        .ieee-image {
+            max-width: 100%;
+            height: auto;
+            display: block;
+            margin: 0 auto;
+        }
+        
+        .ieee-image-very-small { width: 1.5in; }
+        .ieee-image-small { width: 2.0in; }
+        .ieee-image-medium { width: 2.5in; }
+        .ieee-image-large { width: 3.3125in; }
+        
+        .ieee-figure-caption {
+            text-align: center;
+            font-size: 9pt;
+            font-weight: bold;
+            margin: 6px 0 12px 0;
+            break-before: avoid;
+        }
+        
+        /* REFERENCES */
+        .ieee-reference {
+            font-size: 9pt;
+            margin: 3px 0;
+            padding-left: 15px;
+            text-indent: -15px;
+            text-align: justify;
+            text-justify: inter-word;
+            hyphens: auto;
+            letter-spacing: -0.02em;
+            word-spacing: 0.05em;
+        }
+        
+        /* PAGE BREAKS */
+        .page-break {
+            page-break-before: always;
+            break-before: page;
+        }
+        
+        .keep-together {
+            break-inside: avoid;
+            page-break-inside: avoid;
+        }
+        
+        /* PRINT OPTIMIZATIONS */
+        @media print {
+            body {
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+            
+            .ieee-table {
+                border-collapse: collapse !important;
+            }
+            
+            .ieee-table-header,
+            .ieee-table-cell {
+                border: 1px solid black !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="ieee-title">Unified HTML-Based IEEE Document Generation: Achieving 100% Visual Identity Between DOCX and PDF Outputs</div>
+    <div class="ieee-authors-container"><div class="ieee-authors-row"><div class="ieee-author"><div class="author-name">KIRO AI Assistant</div><div class="author-affiliation">Advanced Document Processing Division</div><div class="author-affiliation">Format-A Development Team</div><div class="author-affiliation">San Francisco</div><div class="author-affiliation">CA</div><div class="author-email">kiro@format-a.com</div></div><div class="ieee-author"><div class="author-name">IEEE Standards Compliance Bot</div><div class="author-affiliation">Quality Assurance Division</div><div class="author-affiliation">Format-A Development Team</div><div class="author-affiliation">Palo Alto</div><div class="author-affiliation">CA</div><div class="author-email">ieee@format-a.com</div></div><div class="ieee-author"><div class="author-name">Perfect Justification Engine</div><div class="author-affiliation">Typography Research Lab</div><div class="author-affiliation">Format-A Development Team</div><div class="author-affiliation">Berkeley</div><div class="author-affiliation">CA</div><div class="author-email">typography@format-a.com</div></div></div></div>
+    
+    <div class="ieee-two-column">
+        <div class="ieee-abstract"><strong>Abstract—</strong>This paper presents a revolutionary approach to IEEE document generation that achieves 100% visual identity between DOCX and PDF outputs. By utilizing a unified HTML master template with pixel-perfect CSS specifications, we eliminate the inconsistencies that arise from using different rendering engines for DOCX (OpenXML + Word) and PDF (WeasyPrint + CSS). Our method ensures identical line breaks, justification, figure placement, table spacing, and author block layouts across both formats, matching the quality of LaTeX-generated IEEE papers.</div>
+        <div class="ieee-keywords"><strong>Index Terms—</strong>IEEE formatting, unified HTML generation, visual identity, DOCX-PDF consistency, perfect justification, LaTeX quality, document processing, typography</div>
+        
+        <div class="ieee-heading">1. INTRODUCTION TO UNIFIED GENERATION</div><div class="ieee-paragraph">Traditional document generation systems suffer from a fundamental problem: they use different rendering engines for different output formats. DOCX generation relies on Microsoft Word's OpenXML specifications and rendering engine, while PDF generation uses various HTML-to-PDF converters with CSS-based layouts. This disparity results in documents that may look similar but are not visually identical, with differences in line breaks, justification quality, spacing, and element positioning.</div><div class="ieee-paragraph">Our unified HTML-based approach solves this problem by generating a single master HTML document with pixel-perfect IEEE CSS specifications. This master HTML serves as the single source of truth for both DOCX and PDF outputs, ensuring 100% visual consistency. The approach leverages advanced CSS properties for perfect text justification, precise spacing controls, and exact element positioning that matches LaTeX-quality typography.</div><div class="ieee-heading">2. TECHNICAL ARCHITECTURE</div><div class="ieee-paragraph">The unified generation system consists of three core components: the master HTML generator, the WeasyPrint PDF renderer, and the pypandoc DOCX converter. Each component is designed to preserve the exact formatting specifications defined in the master HTML template.</div><div class="ieee-table-container"><table class="ieee-table"><thead><tr><th class="ieee-table-header">Component</th><th class="ieee-table-header">Purpose</th><th class="ieee-table-header">Technology</th><th class="ieee-table-header">Output Quality</th></tr></thead><tbody><tr><td class="ieee-table-cell">Master HTML Generator</td><td class="ieee-table-cell">Single source template</td><td class="ieee-table-cell">CSS3 + HTML5</td><td class="ieee-table-cell">Perfect</td></tr><tr><td class="ieee-table-cell">WeasyPrint PDF Renderer</td><td class="ieee-table-cell">HTML to PDF conversion</td><td class="ieee-table-cell">Pango + Cairo</td><td class="ieee-table-cell">LaTeX-quality</td></tr><tr><td class="ieee-table-cell">pypandoc DOCX Converter</td><td class="ieee-table-cell">HTML to DOCX conversion</td><td class="ieee-table-cell">Pandoc + OpenXML</td><td class="ieee-table-cell">Word-compatible</td></tr><tr><td class="ieee-table-cell">Fallback DOCX Generator</td><td class="ieee-table-cell">Legacy compatibility</td><td class="ieee-table-cell">python-docx</td><td class="ieee-table-cell">Good</td></tr><tr><td class="ieee-table-cell">ReportLab PDF Fallback</td><td class="ieee-table-cell">Cross-platform PDF</td><td class="ieee-table-cell">ReportLab</td><td class="ieee-table-cell">Good</td></tr></tbody></table><div class="ieee-table-caption">TABLE 2.1: COMPARISON OF SYSTEM COMPONENTS AND THEIR ROLES IN UNIFIED GENERATION</div></div><div class="ieee-paragraph">The master HTML template incorporates exact IEEE LaTeX PDF specifications, including precise font sizes (24pt title, 10pt body, 9pt captions), exact margins (0.75 inches all sides), perfect two-column layout with 0.25-inch gap, and advanced justification properties that produce LaTeX-quality text alignment.</div><div class="ieee-heading">3. PERFECT JUSTIFICATION IMPLEMENTATION</div><div class="ieee-paragraph">The key innovation in our approach is the implementation of perfect text justification that matches LaTeX quality. This is achieved through a combination of CSS properties: text-align: justify, text-justify: inter-word, hyphens: auto, letter-spacing: -0.02em, and word-spacing: 0.05em. These properties work together to ensure that every line of text ends at exactly the same horizontal position, creating the clean, professional appearance characteristic of high-quality academic publications.</div><div class="ieee-image-container"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==" class="ieee-image ieee-image-large" alt="Figure 3.1" /><div class="ieee-figure-caption">FIG. 3.1: VISUAL DEMONSTRATION OF PERFECT TEXT JUSTIFICATION WITH IDENTICAL LINE ENDINGS</div></div><div class="ieee-paragraph">The justification system also incorporates advanced typography controls including orphan and widow prevention, optimal hyphenation patterns, and font feature settings for ligatures and kerning. These enhancements ensure that the generated documents maintain professional typography standards throughout.</div><div class="ieee-heading">4. AUTHOR BLOCK LAYOUT PRECISION</div><div class="ieee-paragraph">One of the most challenging aspects of IEEE document formatting is the author block layout, which must accommodate varying numbers of authors while maintaining consistent spacing and alignment. Our system uses CSS Grid with fixed column specifications to ensure that author blocks are always laid out in exactly three columns with 0.25-inch gaps, regardless of the number of authors.</div><div class="ieee-table-container"><table class="ieee-table"><thead><tr><th class="ieee-table-header">Element</th><th class="ieee-table-header">Font Size</th><th class="ieee-table-header">Weight</th><th class="ieee-table-header">Alignment</th><th class="ieee-table-header">Spacing</th></tr></thead><tbody><tr><td class="ieee-table-cell">Author Name</td><td class="ieee-table-cell">10pt</td><td class="ieee-table-cell">Bold</td><td class="ieee-table-cell">Center</td><td class="ieee-table-cell">3px bottom</td></tr><tr><td class="ieee-table-cell">Department</td><td class="ieee-table-cell">10pt</td><td class="ieee-table-cell">Italic</td><td class="ieee-table-cell">Center</td><td class="ieee-table-cell">2px bottom</td></tr><tr><td class="ieee-table-cell">Organization</td><td class="ieee-table-cell">10pt</td><td class="ieee-table-cell">Italic</td><td class="ieee-table-cell">Center</td><td class="ieee-table-cell">2px bottom</td></tr><tr><td class="ieee-table-cell">Location</td><td class="ieee-table-cell">10pt</td><td class="ieee-table-cell">Italic</td><td class="ieee-table-cell">Center</td><td class="ieee-table-cell">2px bottom</td></tr><tr><td class="ieee-table-cell">Email</td><td class="ieee-table-cell">9pt</td><td class="ieee-table-cell">Regular</td><td class="ieee-table-cell">Center</td><td class="ieee-table-cell">2px top</td></tr></tbody></table><div class="ieee-table-caption">TABLE 4.1: PRECISE SPECIFICATIONS FOR AUTHOR BLOCK LAYOUT IN IEEE FORMAT</div></div><div class="ieee-paragraph">The CSS Grid approach ensures that author information is consistently formatted and positioned, with automatic handling of varying content lengths and proper alignment across all three columns. This eliminates the layout inconsistencies that often occur with table-based or float-based author block implementations.</div><div class="ieee-heading">5. TABLE AND FIGURE INTEGRATION</div><div class="ieee-paragraph">Tables and figures are integrated using identical CSS classes and positioning rules that ensure consistent placement and spacing in both DOCX and PDF outputs. The system supports interactive tables with proper IEEE formatting, image-based tables for complex layouts, and figures with precise sizing controls.</div><div class="ieee-image-container"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==" class="ieee-image ieee-image-medium" alt="Figure 5.1" /><div class="ieee-figure-caption">FIG. 5.1: EXAMPLE OF PRECISE FIGURE PLACEMENT WITH CONSISTENT SPACING AND ALIGNMENT</div></div><div class="ieee-paragraph">All tables and figures include proper IEEE-standard numbering (TABLE X.Y and FIG. X.Y formats) with bold captions that are consistently positioned and formatted. The page-break-inside: avoid property ensures that tables and figures are never split across pages, maintaining professional document appearance.</div><div class="ieee-heading">6. VALIDATION AND QUALITY ASSURANCE</div><div class="ieee-paragraph">The unified generation system includes comprehensive validation mechanisms to ensure output quality and consistency. Automated tests verify that both DOCX and PDF outputs maintain identical visual characteristics, including line break positions, element spacing, and overall layout structure.</div><div class="ieee-paragraph">Quality assurance processes include pixel-level comparison of rendered outputs, typography analysis to verify justification quality, and compliance checking against IEEE formatting standards. These processes ensure that generated documents meet the highest standards of academic publication quality.</div>
+        
+        <div class="ieee-heading">REFERENCES</div><div class="ieee-reference">[1] IEEE Standards Association. (2021). IEEE Editorial Style Manual for Authors. IEEE Press, New York, NY, USA.</div><div class="ieee-reference">[2] Knuth, D. E. (1986). The TeXbook. Addison-Wesley Professional, Reading, MA, USA.</div><div class="ieee-reference">[3] Bringhurst, R. (2019). The Elements of Typographic Style, 4th ed. Hartley & Marks Publishers, Vancouver, BC, Canada.</div><div class="ieee-reference">[4] W3C CSS Working Group. (2023). CSS Text Module Level 3. World Wide Web Consortium, Cambridge, MA, USA.</div><div class="ieee-reference">[5] WeasyPrint Development Team. (2024). WeasyPrint Documentation: HTML/CSS to PDF Converter. Kozea, Lyon, France.</div><div class="ieee-reference">[6] MacFarlane, J. (2023). Pandoc User's Guide: Universal Document Converter. University of California, Berkeley, CA, USA.</div>
+    </div>
+</body>
+</html>
