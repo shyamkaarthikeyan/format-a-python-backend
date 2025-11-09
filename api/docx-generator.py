@@ -15,52 +15,25 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.join(current_dir, '..')
 sys.path.insert(0, parent_dir)
 
+# Import the IEEE generator - this MUST work for proper formatting
 try:
     from ieee_generator_fixed import generate_ieee_document
+    print("Successfully imported IEEE generator for DOCX", file=sys.stderr)
 except ImportError as e:
-    print(f"Import error: {e}", file=sys.stderr)
-    # Create a simple fallback DOCX generator
-    def generate_ieee_document(data):
-        from docx import Document
-        from docx.shared import Pt
-        from io import BytesIO
-        
-        doc = Document()
-        
-        # Add title
-        title = doc.add_heading(data.get('title', 'Untitled Document'), 0)
-        title.alignment = 1  # Center alignment
-        
-        # Add authors
-        if data.get('authors'):
-            authors_text = ', '.join([author.get('name', '') for author in data.get('authors', [])])
-            author_para = doc.add_paragraph(authors_text)
-            author_para.alignment = 1  # Center alignment
-        
-        # Add abstract
-        if data.get('abstract'):
-            doc.add_heading('Abstract', level=1)
-            doc.add_paragraph(data.get('abstract'))
-        
-        # Add keywords
-        if data.get('keywords'):
-            doc.add_heading('Keywords', level=1)
-            doc.add_paragraph(data.get('keywords'))
-        
-        # Add sections
-        if data.get('sections'):
-            for i, section in enumerate(data.get('sections', [])):
-                doc.add_heading(f"{i+1}. {section.get('title', 'Section')}", level=1)
-                if section.get('contentBlocks'):
-                    for block in section.get('contentBlocks', []):
-                        if block.get('type') == 'text' and block.get('content'):
-                            doc.add_paragraph(block.get('content'))
-        
-        # Save to BytesIO
-        buffer = BytesIO()
-        doc.save(buffer)
-        buffer.seek(0)
-        return buffer
+    print(f"CRITICAL: Failed to import IEEE generator: {e}", file=sys.stderr)
+    print(f"Current working directory: {os.getcwd()}", file=sys.stderr)
+    print(f"Parent directory: {parent_dir}", file=sys.stderr)
+    print(f"Python path: {sys.path}", file=sys.stderr)
+    
+    # List files in parent directory for debugging
+    try:
+        files = os.listdir(parent_dir)
+        print(f"Files in parent directory: {files}", file=sys.stderr)
+    except Exception as list_err:
+        print(f"Could not list parent directory: {list_err}", file=sys.stderr)
+    
+    # This should not happen - raise the error instead of using fallback
+    raise ImportError(f"IEEE generator is required for proper DOCX formatting: {e}")
 
 class handler(BaseHTTPRequestHandler):
     def do_OPTIONS(self):
