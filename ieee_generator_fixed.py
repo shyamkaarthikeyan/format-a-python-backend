@@ -578,56 +578,8 @@ def add_ieee_body_paragraph(doc, text):
     run.font.name = 'Times New Roman'
     run.font.size = Pt(10)
     
-    # Apply EXACT IEEE LaTeX formatting via OpenXML
-    pPr = para._element.get_or_add_pPr()
-    
-    # Clear existing formatting
-    for elem in pPr.xpath('./w:spacing | ./w:jc | ./w:adjustRightInd | ./w:snapToGrid'):
-        pPr.remove(elem)
-    
-    # FULL JUSTIFICATION = EQUAL LINE LENGTHS (distribute)
-    jc = OxmlElement('w:jc')
-    jc.set(qn('w:val'), 'distribute')
-    pPr.append(jc)
-    
-    # EXACT LINE SPACING: 12pt (240 twips)
-    spacing = OxmlElement('w:spacing')
-    spacing.set(qn('w:before'), '0')  # 0pt before
-    spacing.set(qn('w:after'), '0')   # 0pt after
-    spacing.set(qn('w:line'), '240')  # 12pt line spacing
-    spacing.set(qn('w:lineRule'), 'exact')
-    pPr.append(spacing)
-    
-    # ADVANCED JUSTIFICATION CONTROLS
-    adjustRightInd = OxmlElement('w:adjustRightInd')
-    adjustRightInd.set(qn('w:val'), '1')
-    pPr.append(adjustRightInd)
-    
-    snapToGrid = OxmlElement('w:snapToGrid')
-    snapToGrid.set(qn('w:val'), '0')
-    pPr.append(snapToGrid)
-    
-    # CHARACTER-LEVEL FORMATTING FOR TIGHT JUSTIFICATION
-    rPr = run._element.get_or_add_rPr()
-    
-    # Clear existing character formatting
-    for elem in rPr.xpath('./w:spacing | ./w:kern | ./w:w'):
-        rPr.remove(elem)
-    
-    # Compress character spacing (-15 twips)
-    spacing_elem = OxmlElement('w:spacing')
-    spacing_elem.set(qn('w:val'), '-15')
-    rPr.append(spacing_elem)
-    
-    # Tight kerning (8 twips)
-    kern = OxmlElement('w:kern')
-    kern.set(qn('w:val'), '8')
-    rPr.append(kern)
-    
-    # Character width scaling (95%)
-    w_elem = OxmlElement('w:w')
-    w_elem.set(qn('w:val'), '95')
-    rPr.append(w_elem)
+    # FIXED: Apply full IEEE justification using the dedicated function
+    apply_ieee_latex_formatting(para, spacing_before=0, spacing_after=0, line_spacing=240)
     
     return para
 
@@ -741,7 +693,7 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
                     print(f"Error processing image in text block: {e}", file=sys.stderr)
                     
         elif block.get('type') == 'image' and block.get('data') and block.get('caption'):
-            # Handle image blocks from React frontend
+            # FIXED: Handle image blocks from React frontend with proper spacing
             import base64
             size = block.get('size', 'medium')
             # Map frontend size names to backend size names
@@ -772,6 +724,7 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
                 # Create image stream
                 image_stream = BytesIO(image_bytes)
                 
+                # FIXED: Image spacing - wrap image in its own paragraph with proper spacing
                 para = doc.add_paragraph()
                 run = para.add_run()
                 picture = run.add_picture(image_stream, width=width)
@@ -780,19 +733,26 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
                     run.clear()
                     run.add_picture(image_stream, width=width * scale_factor, height=IEEE_CONFIG['max_figure_height'])
                 
+                # FIXED: Image spacing
                 para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                para.paragraph_format.space_before = Pt(6)
-                para.paragraph_format.space_after = Pt(6)
+                para.paragraph_format.space_before = Pt(6)  # 6pt before image
+                para.paragraph_format.space_after = Pt(6)   # 6pt after image
+                para.paragraph_format.keep_with_next = True  # Keep with caption
                 
-                # Generate figure number based on section and image position
+                # FIXED: Caption - separate paragraph, centered, italic 9pt
                 img_count = sum(1 for b in content_blocks[:block_idx+1] if b.get('type') == 'image')
                 caption = doc.add_paragraph(f"Fig. {section_idx}.{img_count}: {sanitize_text(block['caption'])}")
                 caption.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                caption.paragraph_format.space_before = Pt(0)
-                caption.paragraph_format.space_after = Pt(12)
+                caption.paragraph_format.space_before = Pt(0)   # 0pt before caption
+                caption.paragraph_format.space_after = Pt(12)   # 12pt after caption
                 if caption.runs:
-                    caption.runs[0].font.name = IEEE_CONFIG['font_name']
-                    caption.runs[0].font.size = IEEE_CONFIG['font_size_caption']
+                    caption.runs[0].font.name = 'Times New Roman'
+                    caption.runs[0].font.size = Pt(9)  # 9pt caption
+                    caption.runs[0].italic = True       # Italic caption
+                
+                # FIXED: Prevent overlap - add spacing after figure block
+                spacing = doc.add_paragraph()
+                spacing.paragraph_format.space_after = Pt(12)  # 12pt spacing to prevent overlap
             except Exception as e:
                 print(f"Error processing image: {e}", file=sys.stderr)
 
@@ -1145,10 +1105,17 @@ def apply_perfect_research_justification(para):
     
     return para
 
-def add_formatted_paragraph(doc, html_content, style_name='Normal', indent_left=None, indent_right=None, space_before=None, space_after=None):
-    """Add a paragraph with HTML formatting support and EXACT IEEE LaTeX formatting."""
-    # Use the IEEE body paragraph function for exact formatting
-    return add_ieee_body_paragraph(doc, html_content or "")
+def add_formatted_paragraph(doc, html_content, **kwargs):
+    """FIXED: Add a paragraph with HTML formatting support and EXACT IEEE LaTeX formatting."""
+    para = add_ieee_body_paragraph(doc, html_content or "")
+    
+    # FIXED: Ensure spacing parameters are applied if provided
+    if 'space_before' in kwargs and kwargs['space_before'] is not None:
+        para.paragraph_format.space_before = kwargs['space_before']
+    if 'space_after' in kwargs and kwargs['space_after'] is not None:
+        para.paragraph_format.space_after = kwargs['space_after']
+    
+    return para
 
 def add_references(doc, references):
     """Add references section with proper alignment (hanging indent) and perfect justification."""
@@ -1160,27 +1127,37 @@ def add_references(doc, references):
         para.paragraph_format.keep_with_next = False
         
         for idx, ref in enumerate(references, 1):
-            if ref.get('text'):
-                # Sanitize the reference text to prevent Unicode encoding errors
+            # Handle both string references and object references
+            if isinstance(ref, str):
+                ref_text = sanitize_text(ref)
+            elif isinstance(ref, dict) and ref.get('text'):
                 ref_text = sanitize_text(ref['text'])
-                para = doc.add_paragraph(f"[{idx}] {ref_text}")
+            else:
+                continue  # Skip invalid references
                 
-                # Set formatting first
-                para.paragraph_format.left_indent = IEEE_CONFIG['column_indent'] + Inches(0.25)
-                para.paragraph_format.right_indent = IEEE_CONFIG['column_indent']
-                para.paragraph_format.first_line_indent = Inches(-0.25)
-                para.paragraph_format.line_spacing = Pt(13.8)  # Proper line spacing
-                para.paragraph_format.line_spacing_rule = 0
-                para.paragraph_format.space_before = Pt(3)
-                para.paragraph_format.space_after = Pt(12)
-                para.paragraph_format.widow_control = True  # Enable widow control
-                para.paragraph_format.keep_with_next = False
-                para.paragraph_format.keep_together = True
-                
-                # Set font
-                if para.runs:
-                    para.runs[0].font.name = IEEE_CONFIG['font_name']
-                    para.runs[0].font.size = IEEE_CONFIG['font_size_body']
+            # Create reference paragraph with hanging indent
+            para = doc.add_paragraph(f"[{idx}] {ref_text}")
+            
+            # Apply IEEE reference formatting with hanging indent
+            pPr = para._element.get_or_add_pPr()
+            
+            # Hanging indent: 0.25" (360 twips)
+            ind = OxmlElement('w:ind')
+            ind.set(qn('w:hanging'), '360')  # 0.25" hanging indent
+            pPr.append(ind)
+            
+            # Reference spacing: 3pt before, 12pt after
+            spacing = OxmlElement('w:spacing')
+            spacing.set(qn('w:before'), '60')   # 3pt before
+            spacing.set(qn('w:after'), '240')   # 12pt after
+            spacing.set(qn('w:line'), '180')    # 9pt line spacing for references
+            spacing.set(qn('w:lineRule'), 'exact')
+            pPr.append(spacing)
+            
+            # Set font: Times New Roman 9pt
+            if para.runs:
+                para.runs[0].font.name = 'Times New Roman'
+                para.runs[0].font.size = Pt(9)  # 9pt for references
                 
                 # Apply perfect justification with equal line lengths
                 para.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
