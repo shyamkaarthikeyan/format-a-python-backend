@@ -94,15 +94,15 @@ class handler(BaseHTTPRequestHandler):
             
             # Generate the DOCX document
             print("Generating DOCX document...", file=sys.stderr)
-            docx_buffer = generate_ieee_document(document_data)
+            docx_bytes = generate_ieee_document(document_data)
             
-            if not docx_buffer or docx_buffer.getvalue() == b'':
+            if not docx_bytes or len(docx_bytes) == 0:
                 raise Exception("Generated DOCX document is empty")
             
             # Convert to base64 for JSON response
-            docx_base64 = base64.b64encode(docx_buffer.getvalue()).decode('utf-8')
+            docx_base64 = base64.b64encode(docx_bytes).decode('utf-8')
             
-            print(f"DOCX generated successfully, size: {len(docx_buffer.getvalue())} bytes", file=sys.stderr)
+            print(f"DOCX generated successfully, size: {len(docx_bytes)} bytes", file=sys.stderr)
             
             # Record download in database
             download_recorded = False
@@ -118,7 +118,7 @@ class handler(BaseHTTPRequestHandler):
                 download_data = {
                     'document_title': document_data.get('title', 'Untitled Document'),
                     'file_format': 'docx',
-                    'file_size': len(docx_buffer.getvalue()),
+                    'file_size': len(docx_bytes),
                     'user_agent': user_agent,
                     'ip_address': self.headers.get('X-Forwarded-For', self.client_address[0]),
                     'document_metadata': {
@@ -144,7 +144,7 @@ class handler(BaseHTTPRequestHandler):
                 'success': True,
                 'file_data': docx_base64,
                 'file_type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-                'file_size': len(docx_buffer.getvalue()),
+                'file_size': len(docx_bytes),
                 'message': 'DOCX document generated successfully',
                 'download_recorded': download_recorded
             })

@@ -35,28 +35,27 @@ def sanitize_text(text):
     
     return text
 
-# IEEE formatting configuration - IEEE standard font sizes
+# IEEE formatting configuration - EXACT MATCH TO PDF FORMATTING
 IEEE_CONFIG = {
     'font_name': 'Times New Roman',
-    'font_size_title': Pt(24),
-    'font_size_body': Pt(10),  # IEEE standard: 10pt body text
-    'font_size_caption': Pt(9),
-    'margin_left': Inches(0.75),
+    'font_size_title': Pt(24),        # PDF: 24pt bold centered title
+    'font_size_author': Pt(10),       # PDF: 10pt author names
+    'font_size_body': Pt(10),         # PDF: 10pt body text in 2-column
+    'font_size_abstract': Pt(9),      # PDF: 9pt abstract and keywords
+    'font_size_email': Pt(9),         # PDF: 9pt email addresses
+    'margin_left': Inches(0.75),      # PDF: 54pt = 0.75 inch margins
     'margin_right': Inches(0.75),
     'margin_top': Inches(0.75),
     'margin_bottom': Inches(0.75),
-    'column_count_body': 2,
-    'column_spacing': Inches(0.25),
-    'column_width': Inches(3.375),
-    'column_indent': Inches(0.2),
-    'line_spacing': Pt(13.8),  # Proper spacing for 10pt font (1.38 * 10pt)
-    'figure_sizes': {
-        'Very Small': Inches(1.2),
-        'Small': Inches(1.8),
-        'Medium': Inches(2.5),
-        'Large': Inches(3.2)
-    },
-    'max_figure_height': Inches(4.0),
+    'column_count_body': 2,           # PDF: 2-column layout for body
+    'column_spacing': Inches(0.25),   # PDF: 18pt = 0.25 inch gap between columns
+    'column_width': Inches(3.375),    # PDF: calculated column width
+    'line_spacing_single': Pt(12),    # PDF: single line spacing
+    'line_spacing_body': Pt(13),      # PDF: body text line spacing
+    'spacing_after_title': Pt(12),    # PDF: spacing after title
+    'spacing_after_authors': Pt(10),  # PDF: spacing after authors
+    'spacing_after_abstract': Pt(6),  # PDF: spacing after abstract
+    'spacing_after_keywords': Pt(12), # PDF: spacing after keywords
 }
 
 def set_document_defaults(doc):
@@ -108,15 +107,15 @@ def set_document_defaults(doc):
         heading2.font.bold = True  # IEEE standard: Subsection headings are BOLD
 
 def add_title(doc, title):
-    """Add the paper title - EXACT same as test.py."""
+    """Add the paper title - EXACT MATCH TO PDF: 24pt bold centered Times New Roman."""
     para = doc.add_paragraph()
     run = para.add_run(sanitize_text(title))
     run.bold = True
     run.font.name = IEEE_CONFIG['font_name']
-    run.font.size = IEEE_CONFIG['font_size_title']
+    run.font.size = IEEE_CONFIG['font_size_title']  # 24pt exactly like PDF
     para.alignment = WD_ALIGN_PARAGRAPH.CENTER
     para.paragraph_format.space_before = Pt(0)
-    para.paragraph_format.space_after = Pt(12)
+    para.paragraph_format.space_after = IEEE_CONFIG['spacing_after_title']  # 12pt like PDF
 
 def add_authors(doc, authors):
     """Add authors with proper IEEE formatting - 3 authors per row, multiple rows if needed."""
@@ -269,24 +268,24 @@ def add_authors(doc, authors):
     spacing_para.paragraph_format.space_after = Pt(12)  # IEEE standard spacing
 
 def add_abstract(doc, abstract):
-    """Add the abstract section with italic title followed by PERFECTLY justified content."""
+    """Add the abstract section - EXACT MATCH TO PDF: 9pt bold with Abstract— prefix."""
     if abstract:
-        # Add abstract with italic title and content in same paragraph
+        # Add abstract with bold title and content in same paragraph
         para = doc.add_paragraph()
         
-        # Italic "Abstract—" title (IEEE standard format)
+        # Bold "Abstract—" title (EXACT MATCH TO PDF)
         title_run = para.add_run("Abstract—")
-        title_run.bold = False  # Not bold
-        title_run.italic = True  # IEEE standard: italic title
+        title_run.bold = True  # PDF uses BOLD for Abstract—
+        title_run.italic = False
         title_run.font.name = IEEE_CONFIG['font_name']
-        title_run.font.size = IEEE_CONFIG['font_size_body']
+        title_run.font.size = IEEE_CONFIG['font_size_abstract']  # 9pt like PDF
         
-        # Add abstract content immediately after on SAME LINE (normal weight)
+        # Add abstract content immediately after on SAME LINE (BOLD like PDF)
         content_run = para.add_run(sanitize_text(abstract))
-        content_run.bold = False
-        content_run.italic = False  # Content is normal weight
+        content_run.bold = True  # PDF uses BOLD for abstract content
+        content_run.italic = False
         content_run.font.name = IEEE_CONFIG['font_name']
-        content_run.font.size = IEEE_CONFIG['font_size_body']
+        content_run.font.size = IEEE_CONFIG['font_size_abstract']  # 9pt like PDF
         
         # Apply PERFECT IEEE justification formatting for research paper quality
         para.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
@@ -301,24 +300,24 @@ def add_abstract(doc, abstract):
         apply_perfect_research_justification(para)
 
 def add_keywords(doc, keywords):
-    """Add the keywords section with italic title followed by justified content."""
+    """Add the keywords section - EXACT MATCH TO PDF: 9pt bold with Keywords— prefix."""
     if keywords:
-        # Add keywords with italic title and content in same paragraph
+        # Add keywords with bold title and content in same paragraph
         para = doc.add_paragraph()
         
-        # Italic "Keywords—" title (IEEE standard format)
+        # Bold "Keywords—" title (EXACT MATCH TO PDF)
         title_run = para.add_run("Keywords—")
-        title_run.bold = False  # Not bold
-        title_run.italic = True  # IEEE standard: italic title
+        title_run.bold = True  # PDF uses BOLD for Keywords—
+        title_run.italic = False
         title_run.font.name = IEEE_CONFIG['font_name']
-        title_run.font.size = IEEE_CONFIG['font_size_body']
+        title_run.font.size = IEEE_CONFIG['font_size_abstract']  # 9pt like PDF
         
-        # Add keywords content immediately after on SAME LINE (normal weight)
+        # Add keywords content immediately after on SAME LINE (BOLD like PDF)
         content_run = para.add_run(sanitize_text(keywords))
-        content_run.bold = False
-        content_run.italic = False  # Content is normal weight
+        content_run.bold = True  # PDF uses BOLD for keywords content
+        content_run.italic = False
         content_run.font.name = IEEE_CONFIG['font_name']
-        content_run.font.size = IEEE_CONFIG['font_size_body']
+        content_run.font.size = IEEE_CONFIG['font_size_abstract']  # 9pt like PDF
         
         # Apply proper IEEE justification formatting
         para.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
