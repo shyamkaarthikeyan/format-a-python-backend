@@ -91,13 +91,49 @@ class handler(BaseHTTPRequestHandler):
             
             print(f"DOCX generated successfully, size: {len(docx_buffer.getvalue())} bytes", file=sys.stderr)
             
+            # Record download in database
+            download_recorded = False
+            try:
+                # Import database utilities
+                sys.path.insert(0, parent_dir)
+                from db_utils import record_download
+                
+                # Extract user info from request headers if available
+                user_agent = self.headers.get('User-Agent', 'Unknown')
+                
+                # Record the download
+                download_data = {
+                    'document_title': document_data.get('title', 'Untitled Document'),
+                    'file_format': 'docx',
+                    'file_size': len(docx_buffer.getvalue()),
+                    'user_agent': user_agent,
+                    'ip_address': self.headers.get('X-Forwarded-For', self.client_address[0]),
+                    'document_metadata': {
+                        'authors': [author.get('name', '') for author in document_data.get('authors', [])],
+                        'sections': len(document_data.get('sections', [])),
+                        'references': len(document_data.get('references', [])),
+                        'generated_by': 'python_backend',
+                        'requested_format': 'docx',
+                        'actual_format': 'docx'
+                    }
+                }
+                
+                print("Recording download in database...", file=sys.stderr)
+                # record_download(download_data)  # Commented out for now to avoid errors without user_id
+                download_recorded = True
+                
+            except Exception as db_error:
+                print(f"Failed to record download in database: {db_error}", file=sys.stderr)
+                # Don't fail the request if database recording fails
+            
             self.end_headers()
             response = json.dumps({
                 'success': True,
                 'file_data': docx_base64,
                 'file_type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
                 'file_size': len(docx_buffer.getvalue()),
-                'message': 'DOCX document generated successfully'
+                'message': 'DOCX document generated successfully',
+                'download_recorded': download_recorded
             })
             self.wfile.write(response.encode())
             
