@@ -741,16 +741,10 @@ def apply_equal_justification(para):
     return para
 
 def add_formatted_paragraph(doc, html_content, style_name='Normal', indent_left=None, indent_right=None, space_before=None, space_after=None):
-    """Add a paragraph with HTML formatting support and equal justification."""
+    """Add a paragraph with HTML formatting support and perfect equal line length justification."""
     para = doc.add_paragraph(style=style_name)
     
-    # Apply basic justification
-    para.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-    para.paragraph_format.widow_control = False
-    para.paragraph_format.keep_with_next = False
-    para.paragraph_format.line_spacing = IEEE_CONFIG['line_spacing']
-    para.paragraph_format.line_spacing_rule = 0  # Exact spacing
-    
+    # Set spacing and indentation first
     if indent_left is not None:
         para.paragraph_format.left_indent = indent_left
     if indent_right is not None:
@@ -767,18 +761,26 @@ def add_formatted_paragraph(doc, html_content, style_name='Normal', indent_left=
         parser.feed(html_content)
         parser.close()  # Important: flush any remaining text
     else:
-        # Plain text content
+        # Plain text content from frontend forms
         run = para.add_run(html_content or "")
         run.font.name = IEEE_CONFIG['font_name']
         run.font.size = IEEE_CONFIG['font_size_body']
     
-    # Apply comprehensive equal justification
-    apply_equal_justification(para)
+    # Set proper line spacing for 10pt text
+    para.paragraph_format.line_spacing = Pt(13.8)  # 1.38 * 10pt for proper spacing
+    para.paragraph_format.line_spacing_rule = 0  # Exact spacing
+    para.paragraph_format.widow_control = True  # Enable widow control
+    para.paragraph_format.keep_with_next = False
+    para.paragraph_format.keep_together = False
+    
+    # Apply comprehensive equal line length justification - this is the key fix
+    para.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY  # Set basic justification first
+    apply_equal_justification(para)  # Then apply advanced equal line length controls
     
     return para
 
 def add_references(doc, references):
-    """Add references section with proper alignment (hanging indent)."""
+    """Add references section with proper alignment (hanging indent) and perfect justification."""
     if references:
         para = doc.add_heading("REFERENCES", level=1)
         para.alignment = WD_ALIGN_PARAGRAPH.CENTER  # Center references heading
@@ -791,20 +793,27 @@ def add_references(doc, references):
                 # Sanitize the reference text to prevent Unicode encoding errors
                 ref_text = sanitize_text(ref['text'])
                 para = doc.add_paragraph(f"[{idx}] {ref_text}")
-                para.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+                
+                # Set formatting first
                 para.paragraph_format.left_indent = IEEE_CONFIG['column_indent'] + Inches(0.25)
                 para.paragraph_format.right_indent = IEEE_CONFIG['column_indent']
                 para.paragraph_format.first_line_indent = Inches(-0.25)
-                para.paragraph_format.line_spacing = IEEE_CONFIG['line_spacing']
+                para.paragraph_format.line_spacing = Pt(13.8)  # Proper line spacing
                 para.paragraph_format.line_spacing_rule = 0
                 para.paragraph_format.space_before = Pt(3)
                 para.paragraph_format.space_after = Pt(12)
-                para.paragraph_format.widow_control = False
+                para.paragraph_format.widow_control = True  # Enable widow control
                 para.paragraph_format.keep_with_next = False
                 para.paragraph_format.keep_together = True
+                
+                # Set font
                 if para.runs:
                     para.runs[0].font.name = IEEE_CONFIG['font_name']
                     para.runs[0].font.size = IEEE_CONFIG['font_size_body']
+                
+                # Apply perfect justification with equal line lengths
+                para.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+                apply_equal_justification(para)
 
 def enable_auto_hyphenation(doc):
     """Enable professional hyphenation to improve justification quality."""
