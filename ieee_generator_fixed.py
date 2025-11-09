@@ -480,27 +480,27 @@ def add_keywords(doc, keywords):
         pPr.append(spacing)
 
 def apply_ieee_latex_formatting(para, spacing_before=0, spacing_after=0, line_spacing=240):
-    """Apply EXACT IEEE LaTeX PDF formatting using low-level OpenXML editing."""
+    """Apply EXACT IEEE LaTeX PDF formatting using low-level OpenXML editing - FORCE DISTRIBUTE JUSTIFICATION."""
     pPr = para._element.get_or_add_pPr()
     
     # Clear existing formatting first
     for elem in pPr.xpath('./w:spacing | ./w:jc | ./w:adjustRightInd | ./w:snapToGrid'):
         pPr.remove(elem)
     
-    # 1. FULL JUSTIFICATION = EQUAL LINE LENGTHS (distribute)
+    # 1. FORCE DISTRIBUTE JUSTIFICATION = EVERY LINE ENDS AT SAME POINT (like IEEE papers)
     jc = OxmlElement('w:jc')
-    jc.set(qn('w:val'), 'distribute')  # Equal line lengths like LaTeX
+    jc.set(qn('w:val'), 'distribute')  # NOT 'both' - FORCE distribute for perfect line endings
     pPr.append(jc)
     
-    # 2. EXACT LINE SPACING (12pt = 240 twips)
+    # 2. EXACT LINE SPACING (12pt = 240 twips) - MANDATORY EXACT RULE
     spacing = OxmlElement('w:spacing')
     spacing.set(qn('w:before'), str(spacing_before))
     spacing.set(qn('w:after'), str(spacing_after))
     spacing.set(qn('w:line'), str(line_spacing))
-    spacing.set(qn('w:lineRule'), 'exact')
+    spacing.set(qn('w:lineRule'), 'exact')  # EXACT rule for perfect IEEE spacing
     pPr.append(spacing)
     
-    # 3. ADVANCED JUSTIFICATION CONTROLS
+    # 3. ADVANCED JUSTIFICATION CONTROLS FOR PERFECT ALIGNMENT
     adjustRightInd = OxmlElement('w:adjustRightInd')
     adjustRightInd.set(qn('w:val'), '1')
     pPr.append(adjustRightInd)
@@ -509,7 +509,7 @@ def apply_ieee_latex_formatting(para, spacing_before=0, spacing_after=0, line_sp
     snapToGrid.set(qn('w:val'), '0')
     pPr.append(snapToGrid)
     
-    # 4. CHARACTER-LEVEL FORMATTING FOR TIGHT JUSTIFICATION
+    # 4. CHARACTER-LEVEL COMPRESSION FOR PERFECT LINE ENDINGS (like IEEEtran LaTeX)
     for run in para.runs:
         rPr = run._element.get_or_add_rPr()
         
@@ -517,9 +517,9 @@ def apply_ieee_latex_formatting(para, spacing_before=0, spacing_after=0, line_sp
         for elem in rPr.xpath('./w:spacing | ./w:kern | ./w:w'):
             rPr.remove(elem)
         
-        # Compress character spacing (-15 twips)
+        # Character compression (-8 twips for tighter spacing)
         spacing_elem = OxmlElement('w:spacing')
-        spacing_elem.set(qn('w:val'), '-15')
+        spacing_elem.set(qn('w:val'), '-8')  # Tighter compression for perfect alignment
         rPr.append(spacing_elem)
         
         # Tight kerning (8 twips)
@@ -527,14 +527,14 @@ def apply_ieee_latex_formatting(para, spacing_before=0, spacing_after=0, line_sp
         kern.set(qn('w:val'), '8')
         rPr.append(kern)
         
-        # Character width scaling (95%)
+        # Character width scaling (98% for perfect line endings)
         w_elem = OxmlElement('w:w')
-        w_elem.set(qn('w:val'), '95')
+        w_elem.set(qn('w:val'), '98')  # 98% width for perfect justification
         rPr.append(w_elem)
 
 def setup_two_column_layout(doc):
-    """Setup TWO-COLUMN LAYOUT after abstract/keywords - EXACT IEEE LaTeX specifications."""
-    # Add section break for two-column layout
+    """ENSURE COLUMNS APPLY AFTER ABSTRACT - Setup TWO-COLUMN LAYOUT with EXACT IEEE LaTeX specifications."""
+    # Add section break BEFORE two columns (CRITICAL for proper column application)
     new_section = doc.add_section(WD_SECTION.CONTINUOUS)
     new_section.start_type = WD_SECTION.CONTINUOUS
     
@@ -583,6 +583,152 @@ def add_ieee_body_paragraph(doc, text):
     
     return para
 
+def add_ieee_table(doc, table_data, section_idx, table_count):
+    """FULL DOCX TABLE SUPPORT - Add a table with EXACT IEEE LaTeX formatting that appears in Word."""
+    try:
+        table_type = table_data.get('tableType', table_data.get('type', 'interactive'))
+        
+        if table_type == 'interactive':
+            # Handle interactive tables with headers and data - MUST APPEAR IN WORD
+            headers = table_data.get('headers', [])
+            rows_data = table_data.get('tableData', [])
+            
+            if not headers or not rows_data:
+                print(f"Warning: Interactive table missing headers or data", file=sys.stderr)
+                return
+            
+            # Create table with EXACT IEEE formatting - GUARANTEED TO APPEAR IN WORD
+            num_cols = len(headers)
+            num_rows = len(rows_data) + 1  # +1 for header row
+            
+            table = doc.add_table(rows=num_rows, cols=num_cols)
+            table.style = 'Table Grid'
+            table.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            table.allow_autofit = False  # CRITICAL: Prevent autofit for consistent appearance
+            
+            # Set EXACT column widths - Full column width (4770 twips) divided equally
+            col_width = 4770 // num_cols  # Equal column distribution
+            for col in table.columns:
+                col.width = col_width
+            
+            # HEADER ROW - Bold, centered, 9pt Times New Roman
+            header_row = table.rows[0]
+            for col_idx, header in enumerate(headers):
+                cell = header_row.cells[col_idx]
+                cell.text = sanitize_text(str(header))
+                cell.width = col_width  # Set individual cell width
+                
+                # EXACT IEEE header formatting: BOLD, CENTERED
+                for paragraph in cell.paragraphs:
+                    paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                    for run in paragraph.runs:
+                        run.font.name = 'Times New Roman'
+                        run.font.size = Pt(9)  # 9pt font for tables
+                        run.bold = True  # BOLD headers
+            
+            # DATA ROWS - Regular, left-aligned, 9pt Times New Roman
+            for row_idx, row_data in enumerate(rows_data):
+                table_row = table.rows[row_idx + 1]
+                for col_idx, cell_data in enumerate(row_data):
+                    if col_idx < num_cols:
+                        cell = table_row.cells[col_idx]
+                        cell.text = sanitize_text(str(cell_data))
+                        cell.width = col_width  # Set individual cell width
+                        
+                        # EXACT IEEE data formatting: REGULAR, LEFT-ALIGNED
+                        for paragraph in cell.paragraphs:
+                            paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
+                            for run in paragraph.runs:
+                                run.font.name = 'Times New Roman'
+                                run.font.size = Pt(9)  # 9pt font for table data
+                                run.bold = False  # Regular weight for data
+            
+            # TABLE SPACING - 6pt before/after (EXACT IEEE specification)
+            # Add spacing paragraph before table
+            spacing_before = doc.add_paragraph()
+            spacing_before.paragraph_format.space_after = Pt(6)
+            
+            # Move table after spacing paragraph
+            table_element = table._element
+            spacing_element = spacing_before._element
+            spacing_element.addnext(table_element)
+            
+            # Add spacing paragraph after table
+            spacing_after = doc.add_paragraph()
+            spacing_after.paragraph_format.space_before = Pt(6)
+        
+        elif table_type == 'image':
+            # Handle image tables
+            if table_data.get('data'):
+                import base64
+                try:
+                    image_data = table_data['data']
+                    if ',' in image_data:
+                        image_data = image_data.split(',')[1]
+                    
+                    image_bytes = base64.b64decode(image_data)
+                    image_stream = BytesIO(image_bytes)
+                    
+                    # Add image with proper spacing
+                    para = doc.add_paragraph()
+                    run = para.add_run()
+                    
+                    # Size based on table size setting
+                    size = table_data.get('size', 'medium')
+                    size_mapping = {
+                        'small': Inches(2.0),
+                        'medium': Inches(3.0),
+                        'large': Inches(3.3125)  # Full column width
+                    }
+                    width = size_mapping.get(size, Inches(3.0))
+                    
+                    picture = run.add_picture(image_stream, width=width)
+                    if picture.height > IEEE_CONFIG['max_figure_height']:
+                        scale_factor = IEEE_CONFIG['max_figure_height'] / picture.height
+                        run.clear()
+                        run.add_picture(image_stream, width=width * scale_factor, height=IEEE_CONFIG['max_figure_height'])
+                    
+                    para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                    para.paragraph_format.space_before = Pt(6)
+                    para.paragraph_format.space_after = Pt(6)
+                    
+                except Exception as e:
+                    print(f"Error processing table image: {e}", file=sys.stderr)
+                    return
+        
+        elif table_type == 'latex':
+            # Handle LaTeX tables (convert to text for now)
+            latex_code = table_data.get('latexCode', '')
+            if latex_code:
+                para = doc.add_paragraph()
+                run = para.add_run(f"LaTeX Table Code:\n{sanitize_text(latex_code)}")
+                run.font.name = 'Courier New'
+                run.font.size = Pt(8)
+                para.alignment = WD_ALIGN_PARAGRAPH.LEFT
+                para.paragraph_format.space_before = Pt(6)
+                para.paragraph_format.space_after = Pt(6)
+        
+        # Add table caption
+        caption_text = table_data.get('caption', table_data.get('tableName', ''))
+        if caption_text:
+            caption = doc.add_paragraph(f"Table {section_idx}.{table_count}: {sanitize_text(caption_text)}")
+            caption.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            caption.paragraph_format.space_before = Pt(0)
+            caption.paragraph_format.space_after = Pt(12)
+            if caption.runs:
+                caption.runs[0].font.name = 'Times New Roman'
+                caption.runs[0].font.size = Pt(9)
+                caption.runs[0].italic = True
+        
+        # Add spacing after table to prevent overlap
+        spacing = doc.add_paragraph()
+        spacing.paragraph_format.space_after = Pt(12)
+        
+    except Exception as e:
+        print(f"Error adding table: {e}", file=sys.stderr)
+        import traceback
+        traceback.print_exc(file=sys.stderr)
+
 def add_justified_paragraph(doc, text, style_name='Normal', indent_left=None, indent_right=None, space_before=None, space_after=None):
     """Add a paragraph with professional justification settings for research paper quality."""
     # Use the new IEEE body paragraph function for exact formatting
@@ -623,6 +769,9 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
     # Process content blocks (text and images in order) - Support BOTH naming conventions
     content_blocks = section_data.get('contentBlocks', []) or section_data.get('content_blocks', [])
     
+    # Track table count for numbering
+    table_count = 0
+    
     for block_idx, block in enumerate(content_blocks):
         if block.get('type') == 'text' and block.get('content'):
             space_before = IEEE_CONFIG['line_spacing'] if is_first_section and block_idx == 0 else Pt(3)
@@ -634,6 +783,11 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
                 space_before=space_before,
                 space_after=Pt(12)
             )
+        
+        elif block.get('type') == 'table':
+            # FIXED: Handle table blocks from frontend
+            table_count += 1
+            add_ieee_table(doc, block, section_idx, table_count)
             
             # Check if this text block also has an image attached (React frontend pattern)
             if block.get('data') and block.get('caption'):
@@ -693,18 +847,18 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
                     print(f"Error processing image in text block: {e}", file=sys.stderr)
                     
         elif block.get('type') == 'image' and block.get('data') and block.get('caption'):
-            # FIXED: Handle image blocks from React frontend with proper spacing
+            # IMAGE BLOCK FIX - Respect size mapping, center image, prevent overlap
             import base64
             size = block.get('size', 'medium')
-            # Map frontend size names to backend size names
+            
+            # EXACT size mapping - Very Small → 1.5", Small → 2.0", Medium → 2.5", Large → 3.3125"
             size_mapping = {
-                'very-small': 'Very Small',
-                'small': 'Small', 
-                'medium': 'Medium',
-                'large': 'Large'
+                'very-small': Inches(1.5),    # Very Small = 1.5"
+                'small': Inches(2.0),         # Small = 2.0"
+                'medium': Inches(2.5),        # Medium = 2.5"
+                'large': Inches(3.3125)       # Large = Full column width
             }
-            mapped_size = size_mapping.get(size, 'Medium')
-            width = IEEE_CONFIG['figure_sizes'].get(mapped_size, IEEE_CONFIG['figure_sizes']['Medium'])
+            width = size_mapping.get(size, Inches(2.5))  # Default to medium
             
             # Decode base64 image data
             try:
@@ -724,22 +878,24 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
                 # Create image stream
                 image_stream = BytesIO(image_bytes)
                 
-                # FIXED: Image spacing - wrap image in its own paragraph with proper spacing
+                # PERFECT IMAGE BLOCK - Center image, set spacing, keep with caption
                 para = doc.add_paragraph()
+                para.alignment = WD_ALIGN_PARAGRAPH.CENTER  # CENTER IMAGE
                 run = para.add_run()
                 picture = run.add_picture(image_stream, width=width)
-                if picture.height > IEEE_CONFIG['max_figure_height']:
-                    scale_factor = IEEE_CONFIG['max_figure_height'] / picture.height
-                    run.clear()
-                    run.add_picture(image_stream, width=width * scale_factor, height=IEEE_CONFIG['max_figure_height'])
                 
-                # FIXED: Image spacing
-                para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                para.paragraph_format.space_before = Pt(6)  # 6pt before image
-                para.paragraph_format.space_after = Pt(6)   # 6pt after image
+                # Scale only if height > 4", preserve aspect ratio
+                if picture.height > Inches(4.0):
+                    scale_factor = Inches(4.0) / picture.height
+                    run.clear()
+                    run.add_picture(image_stream, width=width * scale_factor, height=Inches(4.0))
+                
+                # EXACT IEEE image spacing
+                para.paragraph_format.space_before = Pt(6)   # 6pt before
+                para.paragraph_format.space_after = Pt(6)    # 6pt after
                 para.paragraph_format.keep_with_next = True  # Keep with caption
                 
-                # FIXED: Caption - separate paragraph, centered, italic 9pt
+                # PERFECT CAPTION - "Fig. X.Y: Caption", 9pt italic, centered
                 img_count = sum(1 for b in content_blocks[:block_idx+1] if b.get('type') == 'image')
                 caption = doc.add_paragraph(f"Fig. {section_idx}.{img_count}: {sanitize_text(block['caption'])}")
                 caption.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -750,7 +906,7 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
                     caption.runs[0].font.size = Pt(9)  # 9pt caption
                     caption.runs[0].italic = True       # Italic caption
                 
-                # FIXED: Prevent overlap - add spacing after figure block
+                # PREVENT OVERLAP - add spacing after figure block
                 spacing = doc.add_paragraph()
                 spacing.paragraph_format.space_after = Pt(12)  # 12pt spacing to prevent overlap
             except Exception as e:
