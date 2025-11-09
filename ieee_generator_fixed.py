@@ -67,7 +67,7 @@ def set_document_defaults(doc):
         normal = styles['Normal']
         normal.paragraph_format.space_before = Pt(0)
         normal.paragraph_format.space_after = Pt(12)
-        normal.paragraph_format.line_spacing = IEEE_CONFIG['line_spacing']
+        normal.paragraph_format.line_spacing = IEEE_CONFIG['line_spacing_body']
         normal.paragraph_format.line_spacing_rule = 0  # Exact spacing
         normal.paragraph_format.widow_control = False
         normal.font.name = IEEE_CONFIG['font_name']
@@ -290,8 +290,8 @@ def add_abstract(doc, abstract):
         # Apply PERFECT IEEE justification formatting for research paper quality
         para.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
         para.paragraph_format.space_before = Pt(0)
-        para.paragraph_format.space_after = Pt(6)  # Standard IEEE spacing after abstract
-        para.paragraph_format.line_spacing = IEEE_CONFIG['line_spacing']
+        para.paragraph_format.space_after = IEEE_CONFIG['spacing_after_abstract']  # Standard IEEE spacing after abstract
+        para.paragraph_format.line_spacing = IEEE_CONFIG['line_spacing_body']
         para.paragraph_format.line_spacing_rule = 0  # Exact spacing
         para.paragraph_format.widow_control = False
         para.paragraph_format.keep_with_next = False
@@ -323,7 +323,7 @@ def add_keywords(doc, keywords):
         para.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
         para.paragraph_format.space_before = Pt(0)
         para.paragraph_format.space_after = Pt(12)  # Standard IEEE spacing after keywords
-        para.paragraph_format.line_spacing = IEEE_CONFIG['line_spacing']
+        para.paragraph_format.line_spacing = IEEE_CONFIG['line_spacing_body']
         para.paragraph_format.line_spacing_rule = 0  # Exact spacing
         para.paragraph_format.widow_control = False
         para.paragraph_format.keep_with_next = False
