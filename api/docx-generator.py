@@ -19,8 +19,48 @@ try:
     from ieee_generator_fixed import generate_ieee_document
 except ImportError as e:
     print(f"Import error: {e}", file=sys.stderr)
+    # Create a simple fallback DOCX generator
     def generate_ieee_document(data):
-        raise Exception(f"IEEE generator not available: {e}")
+        from docx import Document
+        from docx.shared import Pt
+        from io import BytesIO
+        
+        doc = Document()
+        
+        # Add title
+        title = doc.add_heading(data.get('title', 'Untitled Document'), 0)
+        title.alignment = 1  # Center alignment
+        
+        # Add authors
+        if data.get('authors'):
+            authors_text = ', '.join([author.get('name', '') for author in data.get('authors', [])])
+            author_para = doc.add_paragraph(authors_text)
+            author_para.alignment = 1  # Center alignment
+        
+        # Add abstract
+        if data.get('abstract'):
+            doc.add_heading('Abstract', level=1)
+            doc.add_paragraph(data.get('abstract'))
+        
+        # Add keywords
+        if data.get('keywords'):
+            doc.add_heading('Keywords', level=1)
+            doc.add_paragraph(data.get('keywords'))
+        
+        # Add sections
+        if data.get('sections'):
+            for i, section in enumerate(data.get('sections', [])):
+                doc.add_heading(f"{i+1}. {section.get('title', 'Section')}", level=1)
+                if section.get('contentBlocks'):
+                    for block in section.get('contentBlocks', []):
+                        if block.get('type') == 'text' and block.get('content'):
+                            doc.add_paragraph(block.get('content'))
+        
+        # Save to BytesIO
+        buffer = BytesIO()
+        doc.save(buffer)
+        buffer.seek(0)
+        return buffer
 
 class handler(BaseHTTPRequestHandler):
     def do_OPTIONS(self):
