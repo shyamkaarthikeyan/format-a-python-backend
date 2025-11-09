@@ -49,7 +49,7 @@ IEEE_CONFIG = {
     'column_spacing': Inches(0.25),
     'column_width': Inches(3.375),
     'column_indent': Inches(0.2),
-    'line_spacing': Pt(10),  # Exact spacing for 9.5pt font
+    'line_spacing': Pt(13.8),  # Proper spacing for 10pt font (1.38 * 10pt)
     'figure_sizes': {
         'Very Small': Inches(1.2),
         'Small': Inches(1.8),
@@ -333,14 +333,14 @@ def add_keywords(doc, keywords):
         apply_equal_justification(para)
 
 def add_justified_paragraph(doc, text, style_name='Normal', indent_left=None, indent_right=None, space_before=None, space_after=None):
-    """Add a paragraph with optimized justification settings to prevent excessive word spacing - EXACT COPY from test.py."""
+    """Add a paragraph with professional justification settings for research paper quality."""
     para = doc.add_paragraph(sanitize_text(text))
     para.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
     
-    # Set paragraph formatting with exact spacing controls
-    para.paragraph_format.line_spacing = IEEE_CONFIG['line_spacing']
+    # Set paragraph formatting with proper line spacing for 10pt text
+    para.paragraph_format.line_spacing = Pt(13.8)  # 1.38 * 10pt for proper line spacing
     para.paragraph_format.line_spacing_rule = 0  # Exact spacing
-    para.paragraph_format.widow_control = False
+    para.paragraph_format.widow_control = True  # Enable widow control for better page breaks
     para.paragraph_format.keep_with_next = False
     para.paragraph_format.keep_together = False
     
@@ -356,42 +356,14 @@ def add_justified_paragraph(doc, text, style_name='Normal', indent_left=None, in
     if indent_right is not None:
         para.paragraph_format.right_indent = indent_right
     
-    # Font formatting with controlled spacing - RESTORED from test.py
+    # Font formatting - no aggressive character spacing
     if para.runs:
         run = para.runs[0]
         run.font.name = IEEE_CONFIG['font_name']
         run.font.size = IEEE_CONFIG['font_size_body']
-        
-        # Moderate character spacing controls (not aggressive) - ESSENTIAL for proper justification
-        run_element = run._element
-        rPr = run_element.get_or_add_rPr()
-        
-        # Set moderate character spacing to reduce word gaps without breaking words
-        spacing_element = OxmlElement('w:spacing')
-        spacing_element.set(qn('w:val'), '-5')  # Slight compression to reduce gaps
-        rPr.append(spacing_element)
-        
-        # Prevent automatic text expansion but allow normal word flow
-        run_element.set(qn('w:fitText'), '0')
     
-    # Paragraph-level justification controls - MODERATE approach
-    para_element = para._element
-    pPr = para_element.get_or_add_pPr()
-    
-    # Use standard justification (not distribute) to keep words intact
-    jc = OxmlElement('w:jc')
-    jc.set(qn('w:val'), 'both')  # Standard justify - keeps words together
-    pPr.append(jc)
-    
-    # Control text alignment
-    textAlignment = OxmlElement('w:textAlignment')
-    textAlignment.set(qn('w:val'), 'baseline')
-    pPr.append(textAlignment)
-    
-    # Moderate spacing control - prevent excessive gaps but allow normal flow
-    adjust_right_ind = OxmlElement('w:adjustRightInd')
-    adjust_right_ind.set(qn('w:val'), '0')
-    pPr.append(adjust_right_ind)
+    # Apply professional justification
+    apply_equal_justification(para)
     
     return para
 
@@ -684,7 +656,7 @@ class HTMLToWordParser(HTMLParser):
         super().close()
 
 def apply_equal_justification(para):
-    """Apply comprehensive equal justification controls for perfect word spacing."""
+    """Apply comprehensive equal justification controls for perfect word spacing like research papers."""
     # Get paragraph element for XML manipulation
     para_element = para._element
     pPr = para_element.get_or_add_pPr()
@@ -694,11 +666,11 @@ def apply_equal_justification(para):
     jc.set(qn('w:val'), 'both')  # Full justification both sides
     pPr.append(jc)
     
-    # Advanced spacing control - distribute spacing evenly
+    # Proper line spacing for 10pt text (IEEE standard)
     spacing = OxmlElement('w:spacing')
     spacing.set(qn('w:after'), '0')
     spacing.set(qn('w:before'), '0')
-    spacing.set(qn('w:line'), '240')  # 12pt line spacing in twips
+    spacing.set(qn('w:line'), '276')  # 13.8pt line spacing in twips (1.38 * 10pt * 20)
     spacing.set(qn('w:lineRule'), 'exact')
     pPr.append(spacing)
     
@@ -707,39 +679,44 @@ def apply_equal_justification(para):
     textAlignment.set(qn('w:val'), 'baseline')
     pPr.append(textAlignment)
     
-    # Character-level spacing controls for runs
+    # Enable proper word spacing distribution
+    adjust_right_ind = OxmlElement('w:adjustRightInd')
+    adjust_right_ind.set(qn('w:val'), '1')  # Allow right margin adjustment for better justification
+    pPr.append(adjust_right_ind)
+    
+    # Control automatic spacing for better justification
+    auto_space_de = OxmlElement('w:autoSpaceDE')
+    auto_space_de.set(qn('w:val'), '1')  # Enable auto spacing between Asian and Latin text
+    pPr.append(auto_space_de)
+    
+    auto_space_dn = OxmlElement('w:autoSpaceDN')
+    auto_space_dn.set(qn('w:val'), '1')  # Enable auto spacing between Asian text and numbers
+    pPr.append(auto_space_dn)
+    
+    # Word wrap settings for better line breaks
+    word_wrap = OxmlElement('w:wordWrap')
+    word_wrap.set(qn('w:val'), '1')
+    pPr.append(word_wrap)
+    
+    # Character-level spacing controls for runs - minimal and professional
     for run in para.runs:
         run_element = run._element
         rPr = run_element.get_or_add_rPr()
         
-        # Character spacing - slight compression for better justification
+        # Very minimal character spacing - just enough to improve justification
         char_spacing = OxmlElement('w:spacing')
-        char_spacing.set(qn('w:val'), '-3')  # Slight compression
+        char_spacing.set(qn('w:val'), '0')  # No character compression - let Word handle spacing naturally
         rPr.append(char_spacing)
         
-        # Font kerning for better character spacing
+        # Enable kerning for professional typography
         kern = OxmlElement('w:kern')
-        kern.set(qn('w:val'), '20')  # 1pt kerning
+        kern.set(qn('w:val'), '20')  # 1pt kerning threshold
         rPr.append(kern)
         
-        # Position adjustment for better alignment
+        # No position adjustment - keep natural baseline
         position = OxmlElement('w:position')
         position.set(qn('w:val'), '0')
         rPr.append(position)
-    
-    # Word-level justification controls
-    adjust_right_ind = OxmlElement('w:adjustRightInd')
-    adjust_right_ind.set(qn('w:val'), '0')
-    pPr.append(adjust_right_ind)
-    
-    # Prevent automatic spacing adjustments
-    auto_space_dn = OxmlElement('w:autoSpaceDE')
-    auto_space_dn.set(qn('w:val'), '0')
-    pPr.append(auto_space_dn)
-    
-    auto_space_de = OxmlElement('w:autoSpaceDN')
-    auto_space_de.set(qn('w:val'), '0')
-    pPr.append(auto_space_de)
     
     return para
 
@@ -810,43 +787,53 @@ def add_references(doc, references):
                     para.runs[0].font.size = IEEE_CONFIG['font_size_body']
 
 def enable_auto_hyphenation(doc):
-    """Enable conservative hyphenation to reduce word spacing."""
+    """Enable professional hyphenation to improve justification quality."""
     section = doc.sections[-1]
     sectPr = section._sectPr
 
-    # Enable automatic hyphenation but keep it conservative
+    # Enable automatic hyphenation for better justification
     auto_hyphenation = OxmlElement('w:autoHyphenation')
     auto_hyphenation.set(qn('w:val'), '1')
     sectPr.append(auto_hyphenation)
 
-    # Do NOT hyphenate capitalized words
+    # Do NOT hyphenate capitalized words (proper nouns, acronyms)
     do_not_hyphenate_caps = OxmlElement('w:doNotHyphenateCaps')
     do_not_hyphenate_caps.set(qn('w:val'), '1')
     sectPr.append(do_not_hyphenate_caps)
 
-    # Set a LARGER hyphenation zone
+    # Set optimal hyphenation zone for research papers (0.25 inch)
     hyphenation_zone = OxmlElement('w:hyphenationZone')
-    hyphenation_zone.set(qn('w:val'), '720')
+    hyphenation_zone.set(qn('w:val'), '360')  # 0.25 inch in twips
     sectPr.append(hyphenation_zone)
 
-    # Limit consecutive hyphens
+    # Limit consecutive hyphens to maintain readability
     consecutive_hyphen_limit = OxmlElement('w:consecutiveHyphenLimit')
     consecutive_hyphen_limit.set(qn('w:val'), '2')
     sectPr.append(consecutive_hyphen_limit)
 
 def set_compatibility_options(doc):
-    """Set compatibility options to optimize spacing and justification."""
+    """Set compatibility options to optimize spacing and justification for research paper quality."""
     compat = doc.settings.element.find(qn('w:compat'))
     if compat is None:
         doc.settings.element.append(OxmlElement('w:compat'))
         compat = doc.settings.element.find(qn('w:compat'))
 
-    # Critical options to eliminate word spacing issues
+    # Critical options for professional justification
     
-    # Force Word to use exact character spacing instead of word spacing
-    option1 = OxmlElement('w:useWord2002TableStyleRules')
+    # Use Word 2010+ justification algorithm for better spacing
+    option1 = OxmlElement('w:useWord2010TableStyleRules')
     option1.set(qn('w:val'), '1')
     compat.append(option1)
+    
+    # Enable better line breaking for justified text
+    option2 = OxmlElement('w:doNotBreakWrappedTables')
+    option2.set(qn('w:val'), '1')
+    compat.append(option2)
+    
+    # Use consistent font metrics for better spacing
+    option3 = OxmlElement('w:useWord97LineBreakRules')
+    option3.set(qn('w:val'), '0')  # Disable old line break rules
+    compat.append(option3)
     
     # Prevent Word from expanding spaces for justification
     option2 = OxmlElement('w:doNotExpandShiftReturn')
