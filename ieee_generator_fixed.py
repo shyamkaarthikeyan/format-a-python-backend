@@ -1075,13 +1075,13 @@ def generate_ieee_document(form_data):
     
     cols.set(qn('w:num'), str(IEEE_CONFIG['column_count_body']))
     cols.set(qn('w:sep'), '0')
-    cols.set(qn('w:space'), str(int(IEEE_CONFIG['column_spacing'].pt * 20)))  # Convert to twips
+    cols.set(qn('w:space'), str(int(Inches(0.25).pt * 20)))  # Convert to twips (0.25 inch gap)
     cols.set(qn('w:equalWidth'), '1')
     
     # Add column definitions with proper width
     for i in range(IEEE_CONFIG['column_count_body']):
         col = OxmlElement('w:col')
-        col.set(qn('w:w'), str(int(IEEE_CONFIG['column_width'].pt * 20)))  # Convert to twips
+        col.set(qn('w:w'), str(int(Inches(3.375).pt * 20)))  # Convert to twips (3.375 inch width)
         cols.append(col)
     
     # Prevent column balancing for stable layout
