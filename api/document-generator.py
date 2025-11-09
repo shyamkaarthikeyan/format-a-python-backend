@@ -21,7 +21,7 @@ class handler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_POST(self):
-        """Generate IEEE preview using ieee_generator_fixed.py ONLY"""
+        """Generate IEEE document - supports both HTML preview and DOCX download"""
         try:
             # Read request data
             content_length = int(self.headers.get('Content-Length', 0))
@@ -33,7 +33,12 @@ class handler(BaseHTTPRequestHandler):
                 self.send_error_response(400, 'Title is required')
                 return
             
-            # Generate HTML preview using ieee_generator_fixed.py
+            # Check if this is a DOCX download request
+            if document_data.get('format') == 'docx' and document_data.get('action') == 'download':
+                self.handle_docx_download(document_data)
+                return
+            
+            # Default: Generate HTML preview using ieee_generator_fixed.py
             preview_html = generate_ieee_html_preview(document_data)
             
             # Send success response
@@ -52,7 +57,40 @@ class handler(BaseHTTPRequestHandler):
             self.wfile.write(json.dumps(response).encode('utf-8'))
             
         except Exception as e:
-            self.send_error_response(500, f'Preview generation failed: {str(e)}')
+            self.send_error_response(500, f'Document generation failed: {str(e)}')
+    
+    def handle_docx_download(self, document_data):
+        """Handle DOCX download requests"""
+        try:
+            import base64
+            
+            # Generate DOCX document
+            docx_buffer = generate_ieee_document(document_data)
+            
+            if not docx_buffer or docx_buffer.getvalue() == b'':
+                raise Exception("Generated DOCX document is empty")
+            
+            # Convert to base64 for JSON response
+            docx_base64 = base64.b64encode(docx_buffer.getvalue()).decode('utf-8')
+            
+            # Send success response
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            
+            response = {
+                'success': True,
+                'file_data': docx_base64,
+                'file_type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                'file_size': len(docx_buffer.getvalue()),
+                'message': 'DOCX document generated successfully'
+            }
+            
+            self.wfile.write(json.dumps(response).encode('utf-8'))
+            
+        except Exception as e:
+            self.send_error_response(500, f'DOCX generation failed: {str(e)}')
     
     def send_error_response(self, status_code, error_message):
         """Send error response with CORS headers"""
