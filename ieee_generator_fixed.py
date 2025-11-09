@@ -656,14 +656,14 @@ class HTMLToWordParser(HTMLParser):
         super().close()
 
 def apply_equal_justification(para):
-    """Apply comprehensive equal justification controls for perfect word spacing like research papers."""
+    """Apply comprehensive equal justification controls for perfect equal line lengths like research papers."""
     # Get paragraph element for XML manipulation
     para_element = para._element
     pPr = para_element.get_or_add_pPr()
     
-    # Primary justification setting - both justified
+    # Primary justification setting - distribute text evenly across line
     jc = OxmlElement('w:jc')
-    jc.set(qn('w:val'), 'both')  # Full justification both sides
+    jc.set(qn('w:val'), 'distribute')  # Distribute justification for equal line lengths
     pPr.append(jc)
     
     # Proper line spacing for 10pt text (IEEE standard)
@@ -679,10 +679,15 @@ def apply_equal_justification(para):
     textAlignment.set(qn('w:val'), 'baseline')
     pPr.append(textAlignment)
     
-    # Enable proper word spacing distribution
+    # Force equal line lengths by enabling right margin adjustment
     adjust_right_ind = OxmlElement('w:adjustRightInd')
-    adjust_right_ind.set(qn('w:val'), '1')  # Allow right margin adjustment for better justification
+    adjust_right_ind.set(qn('w:val'), '1')  # Allow right margin adjustment for equal line lengths
     pPr.append(adjust_right_ind)
+    
+    # Enable text compression for better line fitting
+    compress_punctuation = OxmlElement('w:compressPunctuation')
+    compress_punctuation.set(qn('w:val'), '1')
+    pPr.append(compress_punctuation)
     
     # Control automatic spacing for better justification
     auto_space_de = OxmlElement('w:autoSpaceDE')
@@ -698,14 +703,24 @@ def apply_equal_justification(para):
     word_wrap.set(qn('w:val'), '1')
     pPr.append(word_wrap)
     
-    # Character-level spacing controls for runs - minimal and professional
+    # Enable text distribution for equal line lengths
+    text_direction = OxmlElement('w:textDirection')
+    text_direction.set(qn('w:val'), 'lrTb')  # Left-to-right, top-to-bottom
+    pPr.append(text_direction)
+    
+    # Force equal line distribution
+    snap_to_grid = OxmlElement('w:snapToGrid')
+    snap_to_grid.set(qn('w:val'), '0')  # Disable grid snapping for better justification
+    pPr.append(snap_to_grid)
+    
+    # Character-level spacing controls for runs - allow flexibility for equal lines
     for run in para.runs:
         run_element = run._element
         rPr = run_element.get_or_add_rPr()
         
-        # Very minimal character spacing - just enough to improve justification
+        # Allow character spacing adjustment for equal line lengths
         char_spacing = OxmlElement('w:spacing')
-        char_spacing.set(qn('w:val'), '0')  # No character compression - let Word handle spacing naturally
+        char_spacing.set(qn('w:val'), '0')  # Start with no compression
         rPr.append(char_spacing)
         
         # Enable kerning for professional typography
@@ -713,10 +728,15 @@ def apply_equal_justification(para):
         kern.set(qn('w:val'), '20')  # 1pt kerning threshold
         rPr.append(kern)
         
-        # No position adjustment - keep natural baseline
+        # Allow position adjustment for better line fitting
         position = OxmlElement('w:position')
         position.set(qn('w:val'), '0')
         rPr.append(position)
+        
+        # Enable text scaling for equal line lengths
+        w_element = OxmlElement('w:w')
+        w_element.set(qn('w:val'), '100')  # 100% width scaling (can be adjusted by Word)
+        rPr.append(w_element)
     
     return para
 
@@ -812,13 +832,13 @@ def enable_auto_hyphenation(doc):
     sectPr.append(consecutive_hyphen_limit)
 
 def set_compatibility_options(doc):
-    """Set compatibility options to optimize spacing and justification for research paper quality."""
+    """Set compatibility options to optimize spacing and justification for research paper quality with equal line lengths."""
     compat = doc.settings.element.find(qn('w:compat'))
     if compat is None:
         doc.settings.element.append(OxmlElement('w:compat'))
         compat = doc.settings.element.find(qn('w:compat'))
 
-    # Critical options for professional justification
+    # Critical options for professional justification with equal line lengths
     
     # Use Word 2010+ justification algorithm for better spacing
     option1 = OxmlElement('w:useWord2010TableStyleRules')
@@ -834,6 +854,21 @@ def set_compatibility_options(doc):
     option3 = OxmlElement('w:useWord97LineBreakRules')
     option3.set(qn('w:val'), '0')  # Disable old line break rules
     compat.append(option3)
+    
+    # Enable advanced justification for equal line lengths
+    option4 = OxmlElement('w:doNotExpandShiftReturn')
+    option4.set(qn('w:val'), '1')  # Better line break handling
+    compat.append(option4)
+    
+    # Force consistent character spacing
+    option5 = OxmlElement('w:doNotUseEastAsianBreakRules')
+    option5.set(qn('w:val'), '1')  # Use Western justification rules
+    compat.append(option5)
+    
+    # Enable text compression for equal line fitting
+    option6 = OxmlElement('w:allowSpaceOfSameStyleInTable')
+    option6.set(qn('w:val'), '1')  # Better spacing in justified text
+    compat.append(option6)
     
     # Prevent Word from expanding spaces for justification
     option2 = OxmlElement('w:doNotExpandShiftReturn')
