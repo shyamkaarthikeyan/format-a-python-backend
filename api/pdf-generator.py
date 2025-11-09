@@ -17,8 +17,8 @@ sys.path.insert(0, parent_dir)
 
 # Import the IEEE generator - this MUST work for proper formatting
 try:
-    from ieee_generator_fixed import generate_ieee_pdf_perfect_justification
-    print("Successfully imported IEEE PDF generator with perfect justification", file=sys.stderr)
+    from ieee_generator_fixed import generate_ieee_master_html, weasyprint_pdf_from_html, generate_ieee_pdf_perfect_justification
+    print("Successfully imported unified IEEE PDF generator with perfect justification", file=sys.stderr)
 except ImportError as e:
     print(f"CRITICAL: Failed to import IEEE PDF generator: {e}", file=sys.stderr)
     raise ImportError(f"IEEE PDF generator is required: {e}")
@@ -80,21 +80,39 @@ class handler(BaseHTTPRequestHandler):
                 self.wfile.write(error_response.encode())
                 return
             
-            # Generate the PDF document with perfect justification
-            print("🎯 Generating PDF with perfect justification (bypassing Word)...", file=sys.stderr)
+            # Generate PDF using UNIFIED HTML SYSTEM for perfect justification
+            print("🎯 Generating PDF using unified HTML system with perfect justification...", file=sys.stderr)
             
             try:
-                # Generate PDF with WeasyPrint for perfect justification
-                pdf_bytes = generate_ieee_pdf_perfect_justification(document_data)
+                # Step 1: Generate master HTML template
+                print("📄 Step 1: Generating master HTML template...", file=sys.stderr)
+                master_html = generate_ieee_master_html(document_data)
                 
-                if not pdf_bytes or len(pdf_bytes) == 0:
-                    raise Exception("Generated PDF document is empty")
+                # Step 2: Convert HTML to PDF using WeasyPrint
+                print("🎯 Step 2: Converting HTML to PDF with perfect justification...", file=sys.stderr)
+                pdf_bytes = weasyprint_pdf_from_html(master_html)
+                
+                if pdf_bytes and len(pdf_bytes) > 0:
+                    print("✅ Unified HTML-to-PDF generation succeeded with perfect justification", file=sys.stderr)
+                else:
+                    raise Exception("HTML-to-PDF conversion failed")
+                
+            except Exception as unified_error:
+                print(f"⚠️ Unified HTML system failed: {unified_error}", file=sys.stderr)
+                print("🎯 Falling back to original PDF generator...", file=sys.stderr)
+                
+                # Fallback to original PDF generator
+                try:
+                    pdf_bytes = generate_ieee_pdf_perfect_justification(document_data)
                     
-                print("✅ PDF generated with LaTeX-quality justification", file=sys.stderr)
-                
-            except Exception as pdf_error:
-                print(f"PDF generation failed: {pdf_error}", file=sys.stderr)
-                raise Exception(f"PDF generation failed: {pdf_error}")
+                    if not pdf_bytes or len(pdf_bytes) == 0:
+                        raise Exception("Original PDF generator also failed")
+                        
+                    print("✅ Fallback PDF generator succeeded", file=sys.stderr)
+                    
+                except Exception as fallback_error:
+                    print(f"❌ All PDF generation methods failed: Unified={unified_error}, Fallback={fallback_error}", file=sys.stderr)
+                    raise Exception(f"PDF generation completely failed: {fallback_error}")
             
             # Convert to base64 for JSON response
             pdf_base64 = base64.b64encode(pdf_bytes).decode('utf-8')

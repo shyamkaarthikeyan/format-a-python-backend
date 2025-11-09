@@ -17,8 +17,8 @@ sys.path.insert(0, parent_dir)
 
 # Import the IEEE generator - this MUST work for proper formatting
 try:
-    from ieee_generator_fixed import generate_ieee_document
-    print("Successfully imported IEEE generator for DOCX", file=sys.stderr)
+    from ieee_generator_fixed import generate_ieee_master_html, pandoc_html_to_docx, generate_ieee_document
+    print("Successfully imported unified IEEE generator for DOCX", file=sys.stderr)
 except ImportError as e:
     print(f"CRITICAL: Failed to import IEEE generator: {e}", file=sys.stderr)
     print(f"Current working directory: {os.getcwd()}", file=sys.stderr)
@@ -92,37 +92,39 @@ class handler(BaseHTTPRequestHandler):
                 self.wfile.write(error_response.encode())
                 return
             
-            # Generate the DOCX document with fallback approach
-            print("Generating DOCX document...", file=sys.stderr)
+            # Generate DOCX using UNIFIED HTML SYSTEM for 100% visual identity
+            print("🎯 Generating DOCX using unified HTML system...", file=sys.stderr)
             
             try:
-                # Try the full IEEE generator first
-                docx_bytes = generate_ieee_document(document_data)
+                # Step 1: Generate master HTML template
+                print("📄 Step 1: Generating master HTML template...", file=sys.stderr)
+                master_html = generate_ieee_master_html(document_data)
                 
-                if not docx_bytes or len(docx_bytes) == 0:
-                    raise Exception("Generated DOCX document is empty")
-                    
-                print("✅ Full IEEE generator succeeded - using ieee_generator_fixed.py", file=sys.stderr)
+                # Step 2: Convert HTML to DOCX using pypandoc
+                print("📄 Step 2: Converting HTML to DOCX...", file=sys.stderr)
+                docx_bytes = pandoc_html_to_docx(master_html)
                 
-            except Exception as ieee_error:
-                print(f"IEEE generator failed: {ieee_error}", file=sys.stderr)
+                if docx_bytes and len(docx_bytes) > 0:
+                    print("✅ Unified HTML-to-DOCX generation succeeded", file=sys.stderr)
+                else:
+                    raise Exception("HTML-to-DOCX conversion failed")
                 
-                # Fallback to minimal DOCX generation
+            except Exception as unified_error:
+                print(f"⚠️ Unified HTML system failed: {unified_error}", file=sys.stderr)
+                print("📄 Falling back to original IEEE generator...", file=sys.stderr)
+                
+                # Fallback to original IEEE generator
                 try:
-                    print("Trying minimal DOCX generation...", file=sys.stderr)
-                    sys.path.insert(0, parent_dir)
-                    from test_minimal_docx import create_minimal_docx
-                    
-                    docx_bytes = create_minimal_docx(document_data)
+                    docx_bytes = generate_ieee_document(document_data)
                     
                     if not docx_bytes or len(docx_bytes) == 0:
-                        raise Exception("Minimal DOCX generation also failed")
+                        raise Exception("Original IEEE generator also failed")
                         
-                    print("Minimal DOCX generation succeeded", file=sys.stderr)
+                    print("✅ Fallback IEEE generator succeeded", file=sys.stderr)
                     
-                except Exception as minimal_error:
-                    print(f"Minimal DOCX generation failed: {minimal_error}", file=sys.stderr)
-                    raise Exception(f"Both IEEE and minimal generation failed: IEEE={ieee_error}, Minimal={minimal_error}")
+                except Exception as fallback_error:
+                    print(f"❌ All DOCX generation methods failed: Unified={unified_error}, Fallback={fallback_error}", file=sys.stderr)
+                    raise Exception(f"DOCX generation completely failed: {fallback_error}")
             
             # Convert to base64 for JSON response
             docx_base64 = base64.b64encode(docx_bytes).decode('utf-8')

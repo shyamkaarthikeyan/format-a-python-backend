@@ -725,6 +725,17 @@ def add_ieee_table(doc, table_data, section_idx, table_count):
                 caption.runs[0].font.size = Pt(9)
                 caption.runs[0].bold = True  # IEEE standard: table captions are bold
                 caption.runs[0].italic = False
+        else:
+            # Add default caption if none provided
+            caption = doc.add_paragraph(f"TABLE {section_idx}.{table_count}: DATA TABLE")
+            caption.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            caption.paragraph_format.space_before = Pt(6)
+            caption.paragraph_format.space_after = Pt(12)
+            if caption.runs:
+                caption.runs[0].font.name = 'Times New Roman'
+                caption.runs[0].font.size = Pt(9)
+                caption.runs[0].bold = True
+                caption.runs[0].italic = False
         
         # Add spacing after table to prevent overlap
         spacing = doc.add_paragraph()
