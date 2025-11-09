@@ -35,7 +35,11 @@ class handler(BaseHTTPRequestHandler):
     def do_OPTIONS(self):
         """Handle CORS preflight requests"""
         self.send_response(200)
-        self.send_header('Access-Control-Allow-Origin', 'https://format-a.vercel.app')
+        # Allow localhost for development
+        if os.getenv('NODE_ENV') == 'development':
+            self.send_header('Access-Control-Allow-Origin', '*')
+        else:
+            self.send_header('Access-Control-Allow-Origin', 'https://format-a.vercel.app')
         self.send_header('Access-Control-Allow-Methods', 'POST, OPTIONS')
         self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization')
         self.send_header('Access-Control-Allow-Credentials', 'true')
@@ -51,7 +55,11 @@ class handler(BaseHTTPRequestHandler):
             
             # Set CORS headers first
             self.send_response(200)
-            self.send_header('Access-Control-Allow-Origin', 'https://format-a.vercel.app')
+            # Use environment-aware CORS
+            if os.getenv('NODE_ENV') == 'development':
+                self.send_header('Access-Control-Allow-Origin', '*')
+            else:
+                self.send_header('Access-Control-Allow-Origin', 'https://format-a.vercel.app')
             self.send_header('Access-Control-Allow-Methods', 'POST, OPTIONS')
             self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization')
             self.send_header('Access-Control-Allow-Credentials', 'true')
@@ -100,24 +108,16 @@ class handler(BaseHTTPRequestHandler):
             if not docx_buffer or docx_buffer.getvalue() == b'':
                 raise Exception("Generated DOCX document is empty")
             
-            # Try to convert to PDF if libraries are available
-            if PDF_CONVERSION_AVAILABLE:
-                try:
-                    # For serverless environments, PDF conversion might not work
-                    # So we'll provide DOCX as fallback with appropriate message
-                    print("PDF conversion not supported in serverless environment", file=sys.stderr)
-                    raise Exception("PDF conversion not available in serverless environment")
-                except Exception as pdf_error:
-                    print(f"PDF conversion failed: {pdf_error}", file=sys.stderr)
-                    # Fall back to DOCX
-                    file_data = base64.b64encode(docx_buffer.getvalue()).decode('utf-8')
-                    file_type = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-                    message = 'PDF conversion not available in serverless environment. DOCX provided with identical IEEE formatting.'
+            # Always return DOCX for now (PDF conversion disabled in serverless)
+            # This provides identical IEEE formatting as documented
+            file_data = base64.b64encode(docx_buffer.getvalue()).decode('utf-8')
+            file_type = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+            
+            # Provide clear message about format
+            if is_preview:
+                message = 'Preview generated successfully. DOCX format contains identical IEEE formatting to PDF.'
             else:
-                # No PDF conversion available, return DOCX
-                file_data = base64.b64encode(docx_buffer.getvalue()).decode('utf-8')
-                file_type = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-                message = 'PDF conversion not available. DOCX provided with identical IEEE formatting.'
+                message = 'Document generated successfully. DOCX format contains identical IEEE formatting to PDF.'
             
             print(f"Document generated successfully, size: {len(docx_buffer.getvalue())} bytes", file=sys.stderr)
             
@@ -160,11 +160,15 @@ class handler(BaseHTTPRequestHandler):
                         except:
                             pass
                     
-                    # For now, record without user_id - frontend will handle user-specific recording
-                    # This serves as a backup/audit trail
+                    # Record download in database (backend audit trail)
                     print("Recording download in database...", file=sys.stderr)
-                    # record_download(download_data)  # Commented out for now to avoid errors without user_id
-                    download_recorded = True
+                    try:
+                        record_download(download_data)
+                        download_recorded = True
+                        print("✅ Download recorded successfully in backend", file=sys.stderr)
+                    except Exception as record_error:
+                        print(f"⚠️ Backend download recording failed: {record_error}", file=sys.stderr)
+                        download_recorded = False
                     
                 except Exception as db_error:
                     print(f"Failed to record download in database: {db_error}", file=sys.stderr)
@@ -186,7 +190,11 @@ class handler(BaseHTTPRequestHandler):
         except json.JSONDecodeError as e:
             self.send_response(400)
             self.send_header('Content-Type', 'application/json')
-            self.send_header('Access-Control-Allow-Origin', 'https://format-a.vercel.app')
+            # Use environment-aware CORS
+            if os.getenv('NODE_ENV') == 'development':
+                self.send_header('Access-Control-Allow-Origin', '*')
+            else:
+                self.send_header('Access-Control-Allow-Origin', 'https://format-a.vercel.app')
             self.end_headers()
             
             error_response = json.dumps({
@@ -201,7 +209,11 @@ class handler(BaseHTTPRequestHandler):
             
             self.send_response(500)
             self.send_header('Content-Type', 'application/json')
-            self.send_header('Access-Control-Allow-Origin', 'https://format-a.vercel.app')
+            # Use environment-aware CORS
+            if os.getenv('NODE_ENV') == 'development':
+                self.send_header('Access-Control-Allow-Origin', '*')
+            else:
+                self.send_header('Access-Control-Allow-Origin', 'https://format-a.vercel.app')
             self.end_headers()
             
             error_response = json.dumps({

@@ -15,9 +15,13 @@ class handler(BaseHTTPRequestHandler):
     def do_OPTIONS(self):
         """Handle CORS preflight requests"""
         self.send_response(200)
-        self.send_header('Access-Control-Allow-Origin', '*')
+        # Allow localhost for development
+        if os.getenv('NODE_ENV') == 'development':
+            self.send_header('Access-Control-Allow-Origin', '*')
+        else:
+            self.send_header('Access-Control-Allow-Origin', 'https://format-a.vercel.app')
         self.send_header('Access-Control-Allow-Methods', 'POST, OPTIONS')
-        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Preview')
         self.end_headers()
 
     def do_POST(self):
@@ -31,6 +35,11 @@ class handler(BaseHTTPRequestHandler):
             # Validate required field
             if not document_data.get('title'):
                 self.send_error_response(400, 'Title is required')
+                return
+            
+            # Check if this is a PDF download request
+            if document_data.get('format') == 'pdf' and document_data.get('action') == 'download':
+                self.handle_pdf_download(document_data)
                 return
             
             # Check if this is a DOCX download request
@@ -59,6 +68,46 @@ class handler(BaseHTTPRequestHandler):
         except Exception as e:
             self.send_error_response(500, f'Document generation failed: {str(e)}')
     
+    def handle_pdf_download(self, document_data):
+        """Handle PDF download requests - returns DOCX since PDF conversion not available in serverless"""
+        try:
+            import base64
+            
+            # Generate DOCX document (PDF conversion not available in serverless environment)
+            docx_bytes = generate_ieee_document(document_data)
+            
+            if not docx_bytes or len(docx_bytes) == 0:
+                raise Exception("Generated document is empty")
+            
+            # Convert to base64 for JSON response
+            docx_base64 = base64.b64encode(docx_bytes).decode('utf-8')
+            
+            # Send success response with CORS headers
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            # Use environment-aware CORS
+            if os.getenv('NODE_ENV') == 'development':
+                self.send_header('Access-Control-Allow-Origin', '*')
+            else:
+                self.send_header('Access-Control-Allow-Origin', 'https://format-a.vercel.app')
+            self.end_headers()
+            
+            response = {
+                'success': True,
+                'file_data': docx_base64,
+                'file_type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                'file_size': len(docx_bytes),
+                'message': 'PDF conversion not available in serverless environment. DOCX provided with identical IEEE formatting.',
+                'note': 'DOCX format contains identical IEEE formatting to PDF',
+                'requested_format': 'pdf',
+                'actual_format': 'docx'
+            }
+            
+            self.wfile.write(json.dumps(response).encode('utf-8'))
+            
+        except Exception as e:
+            self.send_error_response(500, f'PDF generation failed: {str(e)}')
+
     def handle_docx_download(self, document_data):
         """Handle DOCX download requests"""
         try:
@@ -73,10 +122,13 @@ class handler(BaseHTTPRequestHandler):
             # Convert to base64 for JSON response
             docx_base64 = base64.b64encode(docx_bytes).decode('utf-8')
             
-            # Send success response
+            # Send success response with environment-aware CORS
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
-            self.send_header('Access-Control-Allow-Origin', '*')
+            if os.getenv('NODE_ENV') == 'development':
+                self.send_header('Access-Control-Allow-Origin', '*')
+            else:
+                self.send_header('Access-Control-Allow-Origin', 'https://format-a.vercel.app')
             self.end_headers()
             
             response = {

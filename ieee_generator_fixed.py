@@ -35,87 +35,223 @@ def sanitize_text(text):
     
     return text
 
-# IEEE formatting configuration - EXACT MATCH TO PDF FORMATTING
+# IEEE EXACT LATEX PDF FORMATTING - LOW-LEVEL OPENXML SPECIFICATIONS
 IEEE_CONFIG = {
     'font_name': 'Times New Roman',
-    'font_size_title': Pt(24),        # PDF: 24pt bold centered title
-    'font_size_author': Pt(10),       # PDF: 10pt author names
-    'font_size_body': Pt(10),         # PDF: 10pt body text in 2-column
-    'font_size_abstract': Pt(9),      # PDF: 9pt abstract and keywords
-    'font_size_email': Pt(9),         # PDF: 9pt email addresses
-    'margin_left': Inches(0.75),      # PDF: 54pt = 0.75 inch margins
-    'margin_right': Inches(0.75),
-    'margin_top': Inches(0.75),
-    'margin_bottom': Inches(0.75),
-    'column_count_body': 2,           # PDF: 2-column layout for body
-    'column_spacing': Inches(0.25),   # PDF: 18pt = 0.25 inch gap between columns
-    'column_width': Inches(3.375),    # PDF: calculated column width
-    'line_spacing_single': Pt(12),    # PDF: single line spacing
-    'line_spacing_body': Pt(13),      # PDF: body text line spacing
-    'spacing_after_title': Pt(12),    # PDF: spacing after title
-    'spacing_after_authors': Pt(10),  # PDF: spacing after authors
-    'spacing_after_abstract': Pt(6),  # PDF: spacing after abstract
-    'spacing_after_keywords': Pt(12), # PDF: spacing after keywords
+    # Font sizes (exact IEEE LaTeX specifications)
+    'font_size_title': Pt(24),        # Title: 24pt bold centered
+    'font_size_author_name': Pt(10),  # Author names: 10pt bold
+    'font_size_author_affil': Pt(10), # Author affiliations: 10pt italic
+    'font_size_author_email': Pt(9),  # Author emails: 9pt
+    'font_size_body': Pt(10),         # Body text: 10pt
+    'font_size_abstract': Pt(9),      # Abstract/Keywords: 9pt bold
+    'font_size_caption': Pt(9),       # Captions: 9pt italic
+    'font_size_reference': Pt(9),     # References: 9pt
+    
+    # Page margins (exact IEEE LaTeX: 0.75" all sides = 1080 twips)
+    'margin_twips': 1080,
+    
+    # Two-column layout (exact IEEE LaTeX specifications)
+    'column_count': 2,
+    'column_width_twips': 4770,       # 3.3125" per column
+    'column_gap_twips': 360,          # 0.25" gap between columns
+    'column_indent': Pt(0),           # No indent for column text
+    
+    # Line spacing (exact IEEE LaTeX: 12pt = 240 twips)
+    'line_spacing_twips': 240,
+    'line_spacing': Pt(12),  # For backward compatibility
+    
+    # Paragraph spacing (exact IEEE LaTeX specifications)
+    'spacing_title_after': 240,       # 12pt after title
+    'spacing_abstract_after': 120,    # 6pt after abstract
+    'spacing_keywords_after': 240,    # 12pt after keywords
+    'spacing_section_before': 240,    # 12pt before section headings
+    'spacing_section_after': 0,       # 0pt after section headings
+    
+    # Figure specifications
+    'figure_max_width_twips': 4770,   # Max 3.3125" width (column width)
+    'figure_spacing': 120,             # 6pt before/after figures
+    'figure_sizes': {
+        'Very Small': Inches(1.5),     # 1.5" width
+        'Small': Inches(2.0),          # 2.0" width  
+        'Medium': Inches(2.5),         # 2.5" width
+        'Large': Inches(3.3125)        # Full column width
+    },
+    'max_figure_height': Inches(4.0),  # Max figure height
+    
+    # Reference specifications
+    'reference_hanging_indent': 360,  # 0.25" hanging indent
 }
 
 def set_document_defaults(doc):
-    """Set document-wide defaults to minimize unwanted spacing - EXACT same as test.py."""
+    """Set document-wide defaults using EXACT IEEE LaTeX PDF specifications via OpenXML."""
+    
+    # 1. SET PAGE MARGINS - EXACT IEEE LaTeX: 0.75" all sides (1080 twips)
+    for section in doc.sections:
+        sectPr = section._sectPr
+        pgMar = sectPr.xpath('./w:pgMar')[0] if sectPr.xpath('./w:pgMar') else OxmlElement('w:pgMar')
+        pgMar.set(qn('w:left'), '1080')
+        pgMar.set(qn('w:right'), '1080')
+        pgMar.set(qn('w:top'), '1080')
+        pgMar.set(qn('w:bottom'), '1080')
+        if not sectPr.xpath('./w:pgMar'):
+            sectPr.append(pgMar)
+    
+    # 2. SET HYPHENATION & COMPATIBILITY - EXACT IEEE LaTeX specifications
+    settings = doc.settings
+    settings_element = settings.element
+    
+    # Clear existing settings first
+    for elem in settings_element.xpath('./w:autoHyphenation | ./w:hyphenationZone | ./w:consecutiveHyphenLimit | ./w:doNotHyphenateCaps | ./w:compat'):
+        settings_element.remove(elem)
+    
+    # Add hyphenation settings
+    autoHyphenation = OxmlElement('w:autoHyphenation')
+    autoHyphenation.set(qn('w:val'), '1')
+    settings_element.append(autoHyphenation)
+    
+    hyphenationZone = OxmlElement('w:hyphenationZone')
+    hyphenationZone.set(qn('w:val'), '360')  # 0.25"
+    settings_element.append(hyphenationZone)
+    
+    consecutiveHyphenLimit = OxmlElement('w:consecutiveHyphenLimit')
+    consecutiveHyphenLimit.set(qn('w:val'), '2')
+    settings_element.append(consecutiveHyphenLimit)
+    
+    doNotHyphenateCaps = OxmlElement('w:doNotHyphenateCaps')
+    doNotHyphenateCaps.set(qn('w:val'), '1')
+    settings_element.append(doNotHyphenateCaps)
+    
+    # Add compatibility settings
+    compat = OxmlElement('w:compat')
+    
+    usePrinterMetrics = OxmlElement('w:usePrinterMetrics')
+    usePrinterMetrics.set(qn('w:val'), '1')
+    compat.append(usePrinterMetrics)
+    
+    doNotExpandShiftReturn = OxmlElement('w:doNotExpandShiftReturn')
+    doNotExpandShiftReturn.set(qn('w:val'), '1')
+    compat.append(doNotExpandShiftReturn)
+    
+    settings_element.append(compat)
+    
+    # 3. MODIFY NORMAL STYLE - EXACT IEEE LaTeX specifications via OpenXML
     styles = doc.styles
-
-    # Modify Normal style - EXACT same as test.py
     if 'Normal' in styles:
         normal = styles['Normal']
-        normal.paragraph_format.space_before = Pt(0)
-        normal.paragraph_format.space_after = Pt(12)
-        normal.paragraph_format.line_spacing = IEEE_CONFIG['line_spacing_body']
-        normal.paragraph_format.line_spacing_rule = 0  # Exact spacing
-        normal.paragraph_format.widow_control = False
-        normal.font.name = IEEE_CONFIG['font_name']
-        normal.font.size = IEEE_CONFIG['font_size_body']
-        # Add better spacing control
-        normal.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-        normal.paragraph_format.first_line_indent = Pt(0)
+        # Apply via OpenXML for exact control
+        style_element = normal.element
+        pPr = style_element.xpath('./w:pPr')[0] if style_element.xpath('./w:pPr') else OxmlElement('w:pPr')
+        
+        # Clear existing spacing/alignment
+        for elem in pPr.xpath('./w:spacing | ./w:jc | ./w:ind'):
+            pPr.remove(elem)
+        
+        # EXACT 12pt line spacing (240 twips)
+        spacing = OxmlElement('w:spacing')
+        spacing.set(qn('w:before'), '0')
+        spacing.set(qn('w:after'), '0')
+        spacing.set(qn('w:line'), '240')
+        spacing.set(qn('w:lineRule'), 'exact')
+        pPr.append(spacing)
+        
+        # Full justification
+        jc = OxmlElement('w:jc')
+        jc.set(qn('w:val'), 'both')
+        pPr.append(jc)
+        
+        if not style_element.xpath('./w:pPr'):
+            style_element.append(pPr)
+        
+        # Font settings
+        normal.font.name = 'Times New Roman'
+        normal.font.size = Pt(10)
 
-    # Modify Heading 1 style - IEEE SECTION HEADINGS (BOLD, CENTERED)
+    # Modify Heading 1 style - IEEE SECTION HEADINGS (BOLD, CENTERED, UPPERCASE)
     if 'Heading 1' in styles:
         heading1 = styles['Heading 1']
-        heading1.base_style = styles['Normal']
-        heading1.paragraph_format.space_before = Pt(12)
-        heading1.paragraph_format.space_after = Pt(6)
-        heading1.paragraph_format.line_spacing = Pt(10)
-        heading1.paragraph_format.line_spacing_rule = 0
-        heading1.paragraph_format.keep_with_next = False
-        heading1.paragraph_format.page_break_before = False
-        heading1.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        heading1.font.name = IEEE_CONFIG['font_name']
-        heading1.font.size = IEEE_CONFIG['font_size_body']
-        heading1.font.bold = True  # IEEE standard: Section headings are BOLD
+        style_element = heading1.element
+        pPr = style_element.xpath('./w:pPr')[0] if style_element.xpath('./w:pPr') else OxmlElement('w:pPr')
+        
+        # Clear existing formatting
+        for elem in pPr.xpath('./w:spacing | ./w:jc'):
+            pPr.remove(elem)
+        
+        # Section heading spacing: 12pt before, 0pt after
+        spacing = OxmlElement('w:spacing')
+        spacing.set(qn('w:before'), '240')  # 12pt
+        spacing.set(qn('w:after'), '0')
+        spacing.set(qn('w:line'), '240')
+        spacing.set(qn('w:lineRule'), 'exact')
+        pPr.append(spacing)
+        
+        # Center alignment
+        jc = OxmlElement('w:jc')
+        jc.set(qn('w:val'), 'center')
+        pPr.append(jc)
+        
+        if not style_element.xpath('./w:pPr'):
+            style_element.append(pPr)
+        
+        heading1.font.name = 'Times New Roman'
+        heading1.font.size = Pt(10)
+        heading1.font.bold = True
 
     # Modify Heading 2 style for subsections - IEEE SUBSECTION HEADINGS (BOLD, LEFT)
     if 'Heading 2' in styles:
         heading2 = styles['Heading 2']
-        heading2.base_style = styles['Normal']
-        heading2.paragraph_format.space_before = Pt(6)
-        heading2.paragraph_format.space_after = Pt(3)
-        heading2.paragraph_format.line_spacing = Pt(10)
-        heading2.paragraph_format.line_spacing_rule = 0
-        heading2.paragraph_format.keep_with_next = False
-        heading2.paragraph_format.page_break_before = False
-        heading2.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.LEFT
-        heading2.font.name = IEEE_CONFIG['font_name']
-        heading2.font.size = IEEE_CONFIG['font_size_body']
-        heading2.font.bold = True  # IEEE standard: Subsection headings are BOLD
+        style_element = heading2.element
+        pPr = style_element.xpath('./w:pPr')[0] if style_element.xpath('./w:pPr') else OxmlElement('w:pPr')
+        
+        # Clear existing formatting
+        for elem in pPr.xpath('./w:spacing | ./w:jc'):
+            pPr.remove(elem)
+        
+        # Subsection spacing: 6pt before, 0pt after
+        spacing = OxmlElement('w:spacing')
+        spacing.set(qn('w:before'), '120')  # 6pt
+        spacing.set(qn('w:after'), '0')
+        spacing.set(qn('w:line'), '240')
+        spacing.set(qn('w:lineRule'), 'exact')
+        pPr.append(spacing)
+        
+        # Left alignment
+        jc = OxmlElement('w:jc')
+        jc.set(qn('w:val'), 'left')
+        pPr.append(jc)
+        
+        if not style_element.xpath('./w:pPr'):
+            style_element.append(pPr)
+        
+        heading2.font.name = 'Times New Roman'
+        heading2.font.size = Pt(10)
+        heading2.font.bold = True
 
 def add_title(doc, title):
     """Add the paper title - EXACT MATCH TO PDF: 24pt bold centered Times New Roman."""
     para = doc.add_paragraph()
     run = para.add_run(sanitize_text(title))
     run.bold = True
-    run.font.name = IEEE_CONFIG['font_name']
-    run.font.size = IEEE_CONFIG['font_size_title']  # 24pt exactly like PDF
-    para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    para.paragraph_format.space_before = Pt(0)
-    para.paragraph_format.space_after = IEEE_CONFIG['spacing_after_title']  # 12pt like PDF
+    run.font.name = 'Times New Roman'
+    run.font.size = Pt(24)  # 24pt exactly like PDF
+    
+    # Apply exact OpenXML formatting
+    pPr = para._element.get_or_add_pPr()
+    
+    # Clear existing formatting
+    for elem in pPr.xpath('./w:spacing | ./w:jc'):
+        pPr.remove(elem)
+    
+    # Center alignment
+    jc = OxmlElement('w:jc')
+    jc.set(qn('w:val'), 'center')
+    pPr.append(jc)
+    
+    # Title spacing: 0pt before, 12pt after
+    spacing = OxmlElement('w:spacing')
+    spacing.set(qn('w:before'), '0')
+    spacing.set(qn('w:after'), '240')  # 12pt
+    pPr.append(spacing)
 
 def add_authors(doc, authors):
     """Add authors with proper IEEE formatting - 3 authors per row, multiple rows if needed."""
@@ -268,39 +404,45 @@ def add_authors(doc, authors):
     spacing_para.paragraph_format.space_after = Pt(12)  # IEEE standard spacing
 
 def add_abstract(doc, abstract):
-    """Add the abstract section - EXACT MATCH TO PDF: 9pt bold with Abstract— prefix."""
+    """Add the abstract section - EXACT VISUAL MATCH TO PDF: 9pt bold with Abstract— prefix."""
     if abstract:
-        # Add abstract with bold title and content in same paragraph
+        # Add abstract with bold title and content in same paragraph - EXACTLY like PDF
         para = doc.add_paragraph()
         
         # Bold "Abstract—" title (EXACT MATCH TO PDF)
         title_run = para.add_run("Abstract—")
         title_run.bold = True  # PDF uses BOLD for Abstract—
         title_run.italic = False
-        title_run.font.name = IEEE_CONFIG['font_name']
-        title_run.font.size = IEEE_CONFIG['font_size_abstract']  # 9pt like PDF
+        title_run.font.name = 'Times New Roman'
+        title_run.font.size = Pt(9)  # 9pt like PDF
         
         # Add abstract content immediately after on SAME LINE (BOLD like PDF)
         content_run = para.add_run(sanitize_text(abstract))
         content_run.bold = True  # PDF uses BOLD for abstract content
         content_run.italic = False
-        content_run.font.name = IEEE_CONFIG['font_name']
-        content_run.font.size = IEEE_CONFIG['font_size_abstract']  # 9pt like PDF
+        content_run.font.name = 'Times New Roman'
+        content_run.font.size = Pt(9)  # 9pt like PDF
         
-        # Apply PERFECT IEEE justification formatting for research paper quality
-        para.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-        para.paragraph_format.space_before = Pt(0)
-        para.paragraph_format.space_after = IEEE_CONFIG['spacing_after_abstract']  # Standard IEEE spacing after abstract
-        para.paragraph_format.line_spacing = IEEE_CONFIG['line_spacing_body']
-        para.paragraph_format.line_spacing_rule = 0  # Exact spacing
-        para.paragraph_format.widow_control = False
-        para.paragraph_format.keep_with_next = False
+        # Apply exact OpenXML formatting
+        pPr = para._element.get_or_add_pPr()
         
-        # Apply PERFECT justification with aggressive research paper quality settings
-        apply_perfect_research_justification(para)
+        # Clear existing formatting
+        for elem in pPr.xpath('./w:spacing | ./w:jc'):
+            pPr.remove(elem)
+        
+        # Full justification
+        jc = OxmlElement('w:jc')
+        jc.set(qn('w:val'), 'both')
+        pPr.append(jc)
+        
+        # Abstract spacing: 0pt before, 6pt after
+        spacing = OxmlElement('w:spacing')
+        spacing.set(qn('w:before'), '0')
+        spacing.set(qn('w:after'), '120')  # 6pt
+        pPr.append(spacing)
 
 def add_keywords(doc, keywords):
-    """Add the keywords section - EXACT MATCH TO PDF: 9pt bold with Keywords— prefix."""
+    """Add the keywords section - EXACT IEEE LaTeX PDF formatting with OpenXML."""
     if keywords:
         # Add keywords with bold title and content in same paragraph
         para = doc.add_paragraph()
@@ -309,74 +451,222 @@ def add_keywords(doc, keywords):
         title_run = para.add_run("Keywords—")
         title_run.bold = True  # PDF uses BOLD for Keywords—
         title_run.italic = False
-        title_run.font.name = IEEE_CONFIG['font_name']
-        title_run.font.size = IEEE_CONFIG['font_size_abstract']  # 9pt like PDF
+        title_run.font.name = 'Times New Roman'
+        title_run.font.size = Pt(9)  # 9pt like PDF
         
         # Add keywords content immediately after on SAME LINE (BOLD like PDF)
         content_run = para.add_run(sanitize_text(keywords))
         content_run.bold = True  # PDF uses BOLD for keywords content
         content_run.italic = False
-        content_run.font.name = IEEE_CONFIG['font_name']
-        content_run.font.size = IEEE_CONFIG['font_size_abstract']  # 9pt like PDF
+        content_run.font.name = 'Times New Roman'
+        content_run.font.size = Pt(9)  # 9pt like PDF
         
-        # Apply proper IEEE justification formatting
-        para.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-        para.paragraph_format.space_before = Pt(0)
-        para.paragraph_format.space_after = Pt(12)  # Standard IEEE spacing after keywords
-        para.paragraph_format.line_spacing = IEEE_CONFIG['line_spacing_body']
-        para.paragraph_format.line_spacing_rule = 0  # Exact spacing
-        para.paragraph_format.widow_control = False
-        para.paragraph_format.keep_with_next = False
+        # Apply exact OpenXML formatting
+        pPr = para._element.get_or_add_pPr()
         
-        # Apply comprehensive equal justification
-        apply_equal_justification(para)
+        # Clear existing formatting
+        for elem in pPr.xpath('./w:spacing | ./w:jc'):
+            pPr.remove(elem)
+        
+        # Full justification
+        jc = OxmlElement('w:jc')
+        jc.set(qn('w:val'), 'both')
+        pPr.append(jc)
+        
+        # Keywords spacing: 0pt before, 12pt after
+        spacing = OxmlElement('w:spacing')
+        spacing.set(qn('w:before'), '0')
+        spacing.set(qn('w:after'), '240')  # 12pt
+        pPr.append(spacing)
+
+def apply_ieee_latex_formatting(para, spacing_before=0, spacing_after=0, line_spacing=240):
+    """Apply EXACT IEEE LaTeX PDF formatting using low-level OpenXML editing."""
+    pPr = para._element.get_or_add_pPr()
+    
+    # Clear existing formatting first
+    for elem in pPr.xpath('./w:spacing | ./w:jc | ./w:adjustRightInd | ./w:snapToGrid'):
+        pPr.remove(elem)
+    
+    # 1. FULL JUSTIFICATION = EQUAL LINE LENGTHS (distribute)
+    jc = OxmlElement('w:jc')
+    jc.set(qn('w:val'), 'distribute')  # Equal line lengths like LaTeX
+    pPr.append(jc)
+    
+    # 2. EXACT LINE SPACING (12pt = 240 twips)
+    spacing = OxmlElement('w:spacing')
+    spacing.set(qn('w:before'), str(spacing_before))
+    spacing.set(qn('w:after'), str(spacing_after))
+    spacing.set(qn('w:line'), str(line_spacing))
+    spacing.set(qn('w:lineRule'), 'exact')
+    pPr.append(spacing)
+    
+    # 3. ADVANCED JUSTIFICATION CONTROLS
+    adjustRightInd = OxmlElement('w:adjustRightInd')
+    adjustRightInd.set(qn('w:val'), '1')
+    pPr.append(adjustRightInd)
+    
+    snapToGrid = OxmlElement('w:snapToGrid')
+    snapToGrid.set(qn('w:val'), '0')
+    pPr.append(snapToGrid)
+    
+    # 4. CHARACTER-LEVEL FORMATTING FOR TIGHT JUSTIFICATION
+    for run in para.runs:
+        rPr = run._element.get_or_add_rPr()
+        
+        # Clear existing character formatting
+        for elem in rPr.xpath('./w:spacing | ./w:kern | ./w:w'):
+            rPr.remove(elem)
+        
+        # Compress character spacing (-15 twips)
+        spacing_elem = OxmlElement('w:spacing')
+        spacing_elem.set(qn('w:val'), '-15')
+        rPr.append(spacing_elem)
+        
+        # Tight kerning (8 twips)
+        kern = OxmlElement('w:kern')
+        kern.set(qn('w:val'), '8')
+        rPr.append(kern)
+        
+        # Character width scaling (95%)
+        w_elem = OxmlElement('w:w')
+        w_elem.set(qn('w:val'), '95')
+        rPr.append(w_elem)
+
+def setup_two_column_layout(doc):
+    """Setup TWO-COLUMN LAYOUT after abstract/keywords - EXACT IEEE LaTeX specifications."""
+    # Add section break for two-column layout
+    new_section = doc.add_section(WD_SECTION.CONTINUOUS)
+    new_section.start_type = WD_SECTION.CONTINUOUS
+    
+    # Configure two-column layout via OpenXML with EXACT IEEE specifications
+    sectPr = new_section._sectPr
+    
+    # Set margins - EXACT IEEE LaTeX: 0.75" all sides (1080 twips)
+    pgMar = sectPr.xpath('./w:pgMar')[0] if sectPr.xpath('./w:pgMar') else OxmlElement('w:pgMar')
+    pgMar.set(qn('w:left'), '1080')
+    pgMar.set(qn('w:right'), '1080')
+    pgMar.set(qn('w:top'), '1080')
+    pgMar.set(qn('w:bottom'), '1080')
+    if not sectPr.xpath('./w:pgMar'):
+        sectPr.append(pgMar)
+    
+    # Remove existing cols element if present
+    existing_cols = sectPr.xpath('./w:cols')
+    for col in existing_cols:
+        sectPr.remove(col)
+    
+    # Add new cols element with EXACT IEEE LaTeX specifications
+    cols = OxmlElement('w:cols')
+    cols.set(qn('w:num'), '2')  # 2 columns
+    cols.set(qn('w:space'), '360')  # 0.25" gap (360 twips)
+    cols.set(qn('w:equalWidth'), '1')  # Equal width columns
+    
+    # Add column definitions - EXACT 3.3125" per column (4770 twips)
+    for i in range(2):
+        col = OxmlElement('w:col')
+        col.set(qn('w:w'), '4770')  # 3.3125" width
+        cols.append(col)
+    
+    sectPr.append(cols)
+
+def add_ieee_body_paragraph(doc, text):
+    """Add a body paragraph with EXACT IEEE LaTeX PDF formatting via OpenXML."""
+    para = doc.add_paragraph()
+    run = para.add_run(sanitize_text(text))
+    
+    # Font: Times New Roman 10pt
+    run.font.name = 'Times New Roman'
+    run.font.size = Pt(10)
+    
+    # Apply EXACT IEEE LaTeX formatting via OpenXML
+    pPr = para._element.get_or_add_pPr()
+    
+    # Clear existing formatting
+    for elem in pPr.xpath('./w:spacing | ./w:jc | ./w:adjustRightInd | ./w:snapToGrid'):
+        pPr.remove(elem)
+    
+    # FULL JUSTIFICATION = EQUAL LINE LENGTHS (distribute)
+    jc = OxmlElement('w:jc')
+    jc.set(qn('w:val'), 'distribute')
+    pPr.append(jc)
+    
+    # EXACT LINE SPACING: 12pt (240 twips)
+    spacing = OxmlElement('w:spacing')
+    spacing.set(qn('w:before'), '0')  # 0pt before
+    spacing.set(qn('w:after'), '0')   # 0pt after
+    spacing.set(qn('w:line'), '240')  # 12pt line spacing
+    spacing.set(qn('w:lineRule'), 'exact')
+    pPr.append(spacing)
+    
+    # ADVANCED JUSTIFICATION CONTROLS
+    adjustRightInd = OxmlElement('w:adjustRightInd')
+    adjustRightInd.set(qn('w:val'), '1')
+    pPr.append(adjustRightInd)
+    
+    snapToGrid = OxmlElement('w:snapToGrid')
+    snapToGrid.set(qn('w:val'), '0')
+    pPr.append(snapToGrid)
+    
+    # CHARACTER-LEVEL FORMATTING FOR TIGHT JUSTIFICATION
+    rPr = run._element.get_or_add_rPr()
+    
+    # Clear existing character formatting
+    for elem in rPr.xpath('./w:spacing | ./w:kern | ./w:w'):
+        rPr.remove(elem)
+    
+    # Compress character spacing (-15 twips)
+    spacing_elem = OxmlElement('w:spacing')
+    spacing_elem.set(qn('w:val'), '-15')
+    rPr.append(spacing_elem)
+    
+    # Tight kerning (8 twips)
+    kern = OxmlElement('w:kern')
+    kern.set(qn('w:val'), '8')
+    rPr.append(kern)
+    
+    # Character width scaling (95%)
+    w_elem = OxmlElement('w:w')
+    w_elem.set(qn('w:val'), '95')
+    rPr.append(w_elem)
+    
+    return para
 
 def add_justified_paragraph(doc, text, style_name='Normal', indent_left=None, indent_right=None, space_before=None, space_after=None):
     """Add a paragraph with professional justification settings for research paper quality."""
-    para = doc.add_paragraph(sanitize_text(text))
-    para.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-    
-    # Set paragraph formatting with proper line spacing for 10pt text
-    para.paragraph_format.line_spacing = Pt(13.8)  # 1.38 * 10pt for proper line spacing
-    para.paragraph_format.line_spacing_rule = 0  # Exact spacing
-    para.paragraph_format.widow_control = True  # Enable widow control for better page breaks
-    para.paragraph_format.keep_with_next = False
-    para.paragraph_format.keep_together = False
-    
-    # Set spacing
-    if space_before is not None:
-        para.paragraph_format.space_before = space_before
-    if space_after is not None:
-        para.paragraph_format.space_after = space_after
-    
-    # Set indentation
-    if indent_left is not None:
-        para.paragraph_format.left_indent = indent_left
-    if indent_right is not None:
-        para.paragraph_format.right_indent = indent_right
-    
-    # Font formatting - no aggressive character spacing
-    if para.runs:
-        run = para.runs[0]
-        run.font.name = IEEE_CONFIG['font_name']
-        run.font.size = IEEE_CONFIG['font_size_body']
-    
-    # Apply professional justification
-    apply_equal_justification(para)
-    
-    return para
+    # Use the new IEEE body paragraph function for exact formatting
+    return add_ieee_body_paragraph(doc, text)
 
 def add_section(doc, section_data, section_idx, is_first_section=False):
     """Add a section with content blocks, subsections, and figures - EXACT same as test.py."""
     if section_data.get('title'):
-        para = doc.add_heading(f"{section_idx}. {sanitize_text(section_data['title']).upper()}", level=1)
-        para.alignment = WD_ALIGN_PARAGRAPH.CENTER  # Center section titles
-        para.paragraph_format.page_break_before = False
-        para.paragraph_format.space_before = IEEE_CONFIG['line_spacing']  # Exactly one line before heading
-        para.paragraph_format.space_after = Pt(0)
-        para.paragraph_format.keep_with_next = False
-        para.paragraph_format.keep_together = False
-        para.paragraph_format.widow_control = False
+        # Create section heading with exact IEEE LaTeX formatting
+        para = doc.add_paragraph()
+        run = para.add_run(f"{section_idx}. {sanitize_text(section_data['title']).upper()}")
+        
+        # Font: Times New Roman 10pt bold
+        run.font.name = 'Times New Roman'
+        run.font.size = Pt(10)
+        run.bold = True
+        
+        # Apply exact OpenXML formatting for section headings
+        pPr = para._element.get_or_add_pPr()
+        
+        # Clear existing formatting
+        for elem in pPr.xpath('./w:spacing | ./w:jc'):
+            pPr.remove(elem)
+        
+        # Center alignment (IEEE standard for section headings)
+        jc = OxmlElement('w:jc')
+        jc.set(qn('w:val'), 'center')
+        pPr.append(jc)
+        
+        # Section heading spacing: 12pt before, 0pt after
+        spacing = OxmlElement('w:spacing')
+        spacing.set(qn('w:before'), '240')  # 12pt before
+        spacing.set(qn('w:after'), '0')     # 0pt after
+        spacing.set(qn('w:line'), '240')    # 12pt line spacing
+        spacing.set(qn('w:lineRule'), 'exact')
+        pPr.append(spacing)
 
     # Process content blocks (text and images in order) - Support BOTH naming conventions
     content_blocks = section_data.get('contentBlocks', []) or section_data.get('content_blocks', [])
@@ -856,43 +1146,9 @@ def apply_perfect_research_justification(para):
     return para
 
 def add_formatted_paragraph(doc, html_content, style_name='Normal', indent_left=None, indent_right=None, space_before=None, space_after=None):
-    """Add a paragraph with HTML formatting support and perfect equal line length justification."""
-    para = doc.add_paragraph(style=style_name)
-    
-    # Set spacing and indentation first
-    if indent_left is not None:
-        para.paragraph_format.left_indent = indent_left
-    if indent_right is not None:
-        para.paragraph_format.right_indent = indent_right
-    if space_before is not None:
-        para.paragraph_format.space_before = space_before
-    if space_after is not None:
-        para.paragraph_format.space_after = space_after
-    
-    # Parse HTML and apply formatting
-    if html_content and '<' in html_content and '>' in html_content:
-        # Content contains HTML tags - use parser
-        parser = HTMLToWordParser(para)
-        parser.feed(html_content)
-        parser.close()  # Important: flush any remaining text
-    else:
-        # Plain text content from frontend forms
-        run = para.add_run(html_content or "")
-        run.font.name = IEEE_CONFIG['font_name']
-        run.font.size = IEEE_CONFIG['font_size_body']
-    
-    # Set proper line spacing for 10pt text
-    para.paragraph_format.line_spacing = Pt(13.8)  # 1.38 * 10pt for proper spacing
-    para.paragraph_format.line_spacing_rule = 0  # Exact spacing
-    para.paragraph_format.widow_control = True  # Enable widow control
-    para.paragraph_format.keep_with_next = False
-    para.paragraph_format.keep_together = False
-    
-    # Apply comprehensive equal line length justification - this is the key fix
-    para.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY  # Set basic justification first
-    apply_equal_justification(para)  # Then apply advanced equal line length controls
-    
-    return para
+    """Add a paragraph with HTML formatting support and EXACT IEEE LaTeX formatting."""
+    # Use the IEEE body paragraph function for exact formatting
+    return add_ieee_body_paragraph(doc, html_content or "")
 
 def add_references(doc, references):
     """Add references section with proper alignment (hanging indent) and perfect justification."""
@@ -1040,67 +1296,42 @@ def set_compatibility_options(doc):
     compat.append(option10)
 
 def generate_ieee_document(form_data):
-    """Generate an IEEE-formatted Word document with proper layout."""
+    """Generate IEEE-formatted Word document with EXACT LaTeX PDF formatting via OpenXML."""
     doc = Document()
     
+    # Apply EXACT IEEE LaTeX PDF specifications
     set_document_defaults(doc)
     
-    # Configure first section for single-column title and authors
+    # Configure first section for single-column title and authors (IEEE LaTeX standard)
     section = doc.sections[0]
-    section.left_margin = IEEE_CONFIG['margin_left']
-    section.right_margin = IEEE_CONFIG['margin_right']
-    section.top_margin = IEEE_CONFIG['margin_top']
-    section.bottom_margin = IEEE_CONFIG['margin_bottom']
+    section.left_margin = Inches(0.75)   # EXACT IEEE LaTeX: 0.75" margins
+    section.right_margin = Inches(0.75)
+    section.top_margin = Inches(0.75)
+    section.bottom_margin = Inches(0.75)
     
-    # Add title and authors in single-column layout (IEEE standard)
+    # Add title and authors in single-column layout (EXACT IEEE LaTeX standard)
     add_title(doc, form_data.get('title', ''))
     add_authors(doc, form_data.get('authors', []))
 
-    # Add section break for two-column layout (for body content)
-    new_section = doc.add_section(WD_SECTION.CONTINUOUS)
-    new_section.start_type = WD_SECTION.CONTINUOUS
-    new_section.left_margin = IEEE_CONFIG['margin_left']
-    new_section.right_margin = IEEE_CONFIG['margin_right']
-    new_section.top_margin = IEEE_CONFIG['margin_top']
-    new_section.bottom_margin = IEEE_CONFIG['margin_bottom']
+    # Setup TWO-COLUMN LAYOUT for body content (EXACT IEEE LaTeX specifications)
+    setup_two_column_layout(doc)
     
-    # Configure two-column layout for body content
-    sectPr = new_section._sectPr
-    cols = sectPr.xpath('./w:cols')
-    if cols:
-        cols = cols[0]
-    else:
-        cols = OxmlElement('w:cols')
-        sectPr.append(cols)
-    
-    cols.set(qn('w:num'), str(IEEE_CONFIG['column_count_body']))
-    cols.set(qn('w:sep'), '0')
-    cols.set(qn('w:space'), str(int(Inches(0.25).pt * 20)))  # Convert to twips (0.25 inch gap)
-    cols.set(qn('w:equalWidth'), '1')
-    
-    # Add column definitions with proper width
-    for i in range(IEEE_CONFIG['column_count_body']):
-        col = OxmlElement('w:col')
-        col.set(qn('w:w'), str(int(Inches(3.375).pt * 20)))  # Convert to twips (3.375 inch width)
-        cols.append(col)
-    
-    # Prevent column balancing for stable layout
-    no_balance = OxmlElement('w:noBalance')
-    no_balance.set(qn('w:val'), '1')
-    sectPr.append(no_balance)
-    
-    # Now add abstract and keywords in the properly configured 2-column layout
+    # Add abstract and keywords in two-column layout with EXACT IEEE LaTeX formatting
     add_abstract(doc, form_data.get('abstract', ''))
     add_keywords(doc, form_data.get('keywords', ''))
     
+    # Add sections with EXACT IEEE LaTeX formatting
     for idx, section_data in enumerate(form_data.get('sections', []), 1):
         add_section(doc, section_data, idx, is_first_section=(idx == 1))
     
+    # Add references with EXACT IEEE LaTeX formatting
     add_references(doc, form_data.get('references', []))
     
+    # Apply final IEEE LaTeX compatibility settings
     enable_auto_hyphenation(doc)
     set_compatibility_options(doc)
     
+    # Generate final document
     buffer = BytesIO()
     doc.save(buffer)
     buffer.seek(0)

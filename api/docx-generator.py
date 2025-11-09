@@ -102,7 +102,7 @@ class handler(BaseHTTPRequestHandler):
                 if not docx_bytes or len(docx_bytes) == 0:
                     raise Exception("Generated DOCX document is empty")
                     
-                print("Full IEEE generator succeeded", file=sys.stderr)
+                print("✅ Full IEEE generator succeeded - using ieee_generator_fixed.py", file=sys.stderr)
                 
             except Exception as ieee_error:
                 print(f"IEEE generator failed: {ieee_error}", file=sys.stderr)
