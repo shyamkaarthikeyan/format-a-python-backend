@@ -492,9 +492,9 @@ def apply_ieee_latex_formatting(para, spacing_before=0, spacing_after=0, line_sp
     for elem in pPr.xpath('./w:spacing | ./w:jc | ./w:adjustRightInd | ./w:snapToGrid'):
         pPr.remove(elem)
     
-    # 1. FORCE DISTRIBUTE JUSTIFICATION = EVERY LINE ENDS AT SAME POINT (like IEEE papers)
+    # 1. FULL JUSTIFICATION = CONSISTENT WITH PDF OUTPUT
     jc = OxmlElement('w:jc')
-    jc.set(qn('w:val'), 'distribute')  # NOT 'both' - FORCE distribute for perfect line endings
+    jc.set(qn('w:val'), 'both')  # Use 'both' for consistent Word/PDF justification
     pPr.append(jc)
     
     # 2. EXACT LINE SPACING (12pt = 240 twips) - MANDATORY EXACT RULE
@@ -514,28 +514,8 @@ def apply_ieee_latex_formatting(para, spacing_before=0, spacing_after=0, line_sp
     snapToGrid.set(qn('w:val'), '0')
     pPr.append(snapToGrid)
     
-    # 4. CHARACTER-LEVEL COMPRESSION FOR PERFECT LINE ENDINGS (like IEEEtran LaTeX)
-    for run in para.runs:
-        rPr = run._element.get_or_add_rPr()
-        
-        # Clear existing character formatting
-        for elem in rPr.xpath('./w:spacing | ./w:kern | ./w:w'):
-            rPr.remove(elem)
-        
-        # Character compression (-8 twips for tighter spacing)
-        spacing_elem = OxmlElement('w:spacing')
-        spacing_elem.set(qn('w:val'), '-8')  # Tighter compression for perfect alignment
-        rPr.append(spacing_elem)
-        
-        # Tight kerning (8 twips)
-        kern = OxmlElement('w:kern')
-        kern.set(qn('w:val'), '8')
-        rPr.append(kern)
-        
-        # Character width scaling (98% for perfect line endings)
-        w_elem = OxmlElement('w:w')
-        w_elem.set(qn('w:val'), '98')  # 98% width for perfect justification
-        rPr.append(w_elem)
+    # 4. REMOVED CHARACTER-LEVEL OVERRIDES - They interfere with justification
+    # Let Word handle character spacing naturally for consistent PDF/Word output
 
 def setup_two_column_layout(doc):
     """ENSURE COLUMNS APPLY AFTER ABSTRACT - Setup TWO-COLUMN LAYOUT with EXACT IEEE LaTeX specifications."""
@@ -691,6 +671,7 @@ def add_ieee_table(doc, table_data, section_idx, table_count):
                     if picture.height > IEEE_CONFIG['max_figure_height']:
                         scale_factor = IEEE_CONFIG['max_figure_height'] / picture.height
                         run.clear()
+                        image_stream.seek(0)  # CRITICAL: Reset stream position after clear()
                         run.add_picture(image_stream, width=width * scale_factor, height=IEEE_CONFIG['max_figure_height'])
                     
                     para.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -859,6 +840,7 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
                     if picture.height > IEEE_CONFIG['max_figure_height']:
                         scale_factor = IEEE_CONFIG['max_figure_height'] / picture.height
                         run.clear()
+                        image_stream.seek(0)  # CRITICAL: Reset stream position after clear()
                         run.add_picture(image_stream, width=width * scale_factor, height=IEEE_CONFIG['max_figure_height'])
                     
                     para.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -935,6 +917,7 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
                 if picture.height > Inches(4.0):
                     scale_factor = Inches(4.0) / picture.height
                     run.clear()
+                    image_stream.seek(0)  # CRITICAL: Reset stream position after clear()
                     run.add_picture(image_stream, width=width * scale_factor, height=Inches(4.0))
                 
                 # EXACT IEEE image spacing
@@ -1101,9 +1084,9 @@ def apply_equal_justification(para):
     para_element = para._element
     pPr = para_element.get_or_add_pPr()
     
-    # Primary justification setting - distribute text evenly across line
+    # Primary justification setting - use 'both' for consistent Word/PDF output
     jc = OxmlElement('w:jc')
-    jc.set(qn('w:val'), 'distribute')  # Distribute justification for equal line lengths
+    jc.set(qn('w:val'), 'both')  # Use 'both' for consistent Word/PDF justification
     pPr.append(jc)
     
     # Proper line spacing for 10pt text (IEEE standard)
@@ -1187,9 +1170,9 @@ def apply_perfect_research_justification(para):
     para_element = para._element
     pPr = para_element.get_or_add_pPr()
     
-    # AGGRESSIVE justification setting - force perfect distribution
+    # AGGRESSIVE justification setting - use 'both' for consistent Word/PDF output
     jc = OxmlElement('w:jc')
-    jc.set(qn('w:val'), 'distribute')  # Distribute justification for absolutely equal line lengths
+    jc.set(qn('w:val'), 'both')  # Use 'both' for consistent Word/PDF justification
     pPr.append(jc)
     
     # PERFECT line spacing for 10pt text (IEEE standard) - EXACT control
@@ -1543,6 +1526,7 @@ def generate_ieee_document(form_data):
                     if picture.height > Inches(4.0):
                         scale_factor = Inches(4.0) / picture.height
                         run.clear()
+                        image_stream.seek(0)  # CRITICAL: Reset stream position after clear()
                         run.add_picture(image_stream, width=width * scale_factor, height=Inches(4.0))
                     
                     # Set proper spacing
