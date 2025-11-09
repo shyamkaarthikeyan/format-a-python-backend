@@ -802,8 +802,22 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
             )
         
         elif block.get('type') == 'table':
-            # FIXED: Handle table blocks from frontend
+            # FIXED: Handle table blocks from frontend with GUARANTEED captions
             table_count += 1
+            
+            # FORCE table caption BEFORE table
+            caption_text = block.get('caption', block.get('tableName', f'Data Table {table_count}'))
+            caption = doc.add_paragraph(f"TABLE {section_idx}.{table_count}: {sanitize_text(caption_text).upper()}")
+            caption.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            caption.paragraph_format.space_before = Pt(6)
+            caption.paragraph_format.space_after = Pt(3)
+            if caption.runs:
+                caption.runs[0].font.name = 'Times New Roman'
+                caption.runs[0].font.size = Pt(9)
+                caption.runs[0].bold = True
+                caption.runs[0].italic = False
+            
+            # Now add the table
             add_ieee_table(doc, block, section_idx, table_count)
             
             # Check if this text block also has an image attached (React frontend pattern)
@@ -866,6 +880,20 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
                     print(f"Error processing image in text block: {e}", file=sys.stderr)
                     
         elif block.get('type') == 'image' and block.get('data') and block.get('caption'):
+            # FORCE image count for proper numbering
+            img_count = sum(1 for b in content_blocks[:block_idx+1] if b.get('type') == 'image')
+            
+            # FORCE image caption BEFORE image
+            caption = doc.add_paragraph(f"FIG. {section_idx}.{img_count}: {sanitize_text(block['caption']).upper()}")
+            caption.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            caption.paragraph_format.space_before = Pt(6)
+            caption.paragraph_format.space_after = Pt(3)
+            if caption.runs:
+                caption.runs[0].font.name = 'Times New Roman'
+                caption.runs[0].font.size = Pt(9)
+                caption.runs[0].bold = True
+                caption.runs[0].italic = False
+            
             # IMAGE BLOCK FIX - Respect size mapping, center image, prevent overlap
             import base64
             size = block.get('size', 'medium')
@@ -910,25 +938,12 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
                     run.add_picture(image_stream, width=width * scale_factor, height=Inches(4.0))
                 
                 # EXACT IEEE image spacing
-                para.paragraph_format.space_before = Pt(6)   # 6pt before
-                para.paragraph_format.space_after = Pt(6)    # 6pt after
-                para.paragraph_format.keep_with_next = True  # Keep with caption
-                
-                # PERFECT CAPTION - "Fig. X.Y: Caption", 9pt italic, centered
-                img_count = sum(1 for b in content_blocks[:block_idx+1] if b.get('type') == 'image')
-                caption = doc.add_paragraph(f"FIG. {section_idx}.{img_count}: {sanitize_text(block['caption']).upper()}")
-                caption.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                caption.paragraph_format.space_before = Pt(0)   # 0pt before caption
-                caption.paragraph_format.space_after = Pt(12)   # 12pt after caption
-                if caption.runs:
-                    caption.runs[0].font.name = 'Times New Roman'
-                    caption.runs[0].font.size = Pt(9)  # 9pt caption
-                    caption.runs[0].bold = True         # IEEE standard: figure captions are bold
-                    caption.runs[0].italic = False      # Not italic
+                para.paragraph_format.space_before = Pt(3)   # 3pt before
+                para.paragraph_format.space_after = Pt(12)   # 12pt after
                 
                 # PREVENT OVERLAP - add spacing after figure block
                 spacing = doc.add_paragraph()
-                spacing.paragraph_format.space_after = Pt(12)  # 12pt spacing to prevent overlap
+                spacing.paragraph_format.space_after = Pt(6)  # 6pt spacing to prevent overlap
             except Exception as e:
                 print(f"Error processing image: {e}", file=sys.stderr)
 
@@ -1789,18 +1804,29 @@ def generate_ieee_master_html(form_data):
                         sections_html += '</div>'
                 
                 elif table_type == 'image' and block.get('data'):
-                    # Handle image tables
+                    # Handle image tables - ENSURE PROPER DISPLAY IN WORD
                     image_data = block['data']
                     if ',' in image_data:
                         image_data = image_data.split(',')[1]
                     
+                    # Get table name and caption
+                    table_name = block.get('tableName', block.get('caption', f'Table {section_idx}.{table_count}'))
+                    caption = block.get('caption', block.get('tableName', ''))
+                    
                     size_class = f"ieee-image-{block.get('size', 'medium')}"
                     sections_html += f'<div class="ieee-image-container">'
-                    sections_html += f'<img src="data:image/png;base64,{image_data}" class="ieee-image {size_class}" alt="Table {section_idx}.{table_count}" />'
                     
-                    caption = block.get('caption', block.get('tableName', ''))
-                    if caption:
-                        sections_html += f'<div class="ieee-table-caption">TABLE {section_idx}.{table_count}: {sanitize_text(caption).upper()}</div>'
+                    # Add table name BEFORE image for Word compatibility
+                    if table_name:
+                        sections_html += f'<div class="ieee-table-name">TABLE {section_idx}.{table_count}: {sanitize_text(table_name).upper()}</div>'
+                    
+                    # Image with proper alt text including table name
+                    alt_text = f"Table {section_idx}.{table_count}: {table_name}" if table_name else f"Table {section_idx}.{table_count}"
+                    sections_html += f'<img src="data:image/png;base64,{image_data}" class="ieee-image {size_class}" alt="{alt_text}" title="{alt_text}" />'
+                    
+                    # Caption AFTER image
+                    if caption and caption != table_name:
+                        sections_html += f'<div class="ieee-table-caption">{sanitize_text(caption)}</div>'
                     
                     sections_html += '</div>'
             
@@ -1858,17 +1884,21 @@ def generate_ieee_master_html(form_data):
             color: black;
             background: white;
             
-            /* PERFECT JUSTIFICATION - LaTeX quality */
-            text-align: justify;
-            text-justify: inter-word;
-            hyphens: auto;
-            -webkit-hyphens: auto;
-            -moz-hyphens: auto;
-            -ms-hyphens: auto;
+            /* AGGRESSIVE PERFECT JUSTIFICATION - Force LaTeX quality */
+            text-align: justify !important;
+            text-justify: distribute !important;
+            text-align-last: justify !important;
+            hyphens: auto !important;
+            -webkit-hyphens: auto !important;
+            -moz-hyphens: auto !important;
+            -ms-hyphens: auto !important;
             
-            /* EXACT character spacing for perfect line endings */
-            letter-spacing: -0.02em;
-            word-spacing: 0.05em;
+            /* AGGRESSIVE character spacing for perfect line endings */
+            letter-spacing: -0.03em !important;
+            word-spacing: 0.08em !important;
+            
+            /* WeasyPrint specific justification */
+            -weasy-text-align-last: justify;
             
             /* Typography controls */
             text-rendering: optimizeLegibility;
@@ -1962,14 +1992,17 @@ def generate_ieee_master_html(form_data):
         .ieee-paragraph {{
             font-size: 10pt;
             margin: 0 0 12px 0;
-            text-align: justify;
-            text-justify: inter-word;
-            hyphens: auto;
-            letter-spacing: -0.02em;
-            word-spacing: 0.05em;
+            text-align: justify !important;
+            text-justify: distribute !important;
+            text-align-last: justify !important;
+            hyphens: auto !important;
+            letter-spacing: -0.03em !important;
+            word-spacing: 0.08em !important;
             orphans: 2;
             widows: 2;
-            text-align-last: left;
+            
+            /* WeasyPrint specific */
+            -weasy-text-align-last: justify;
         }}
         
         /* TABLES - exact IEEE formatting */
@@ -2009,6 +2042,16 @@ def generate_ieee_master_html(form_data):
             font-weight: bold;
             margin: 6px 0 12px 0;
             break-before: avoid;
+        }}
+        
+        /* TABLE NAME - appears before image tables */
+        .ieee-table-name {{
+            font-size: 9pt;
+            font-weight: bold;
+            text-align: center;
+            margin: 6pt 0 3pt 0;
+            text-transform: uppercase;
+            letter-spacing: 0.5pt;
         }}
         
         /* IMAGES - exact sizing and positioning */
