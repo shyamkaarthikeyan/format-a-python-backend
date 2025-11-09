@@ -865,8 +865,8 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
                     para.paragraph_format.space_before = Pt(6)
                     para.paragraph_format.space_after = Pt(6)
                     
-                    # Generate figure number based on section and image position
-                    img_count = sum(1 for b in content_blocks[:block_idx+1] if b.get('type') == 'image' or (b.get('type') == 'text' and b.get('data')))
+                    # Generate figure number based on section and image position (count only images)
+                    img_count = sum(1 for b in content_blocks[:block_idx+1] if b.get('type') == 'image')
                     caption = doc.add_paragraph(f"FIG. {section_idx}.{img_count}: {sanitize_text(block['caption']).upper()}")
                     caption.alignment = WD_ALIGN_PARAGRAPH.CENTER
                     caption.paragraph_format.space_before = Pt(0)
@@ -1337,11 +1337,11 @@ def add_references(doc, references):
             ind.set(qn('w:hanging'), '360')  # 0.25" hanging indent
             pPr.append(ind)
             
-            # Reference spacing: 3pt before, 12pt after
+            # Reference spacing: 3pt before, 12pt after, 10pt line spacing (IEEE standard)
             spacing = OxmlElement('w:spacing')
             spacing.set(qn('w:before'), '60')   # 3pt before
             spacing.set(qn('w:after'), '240')   # 12pt after
-            spacing.set(qn('w:line'), '180')    # 9pt line spacing for references
+            spacing.set(qn('w:line'), '200')    # 10pt line spacing for references (IEEE standard)
             spacing.set(qn('w:lineRule'), 'exact')
             pPr.append(spacing)
             
@@ -1491,6 +1491,71 @@ def generate_ieee_document(form_data):
     # Add sections with EXACT IEEE LaTeX formatting
     for idx, section_data in enumerate(form_data.get('sections', []), 1):
         add_section(doc, section_data, idx, is_first_section=(idx == 1))
+    
+    # Process figures array (from figure-form.tsx) - Convert to contentBlocks format
+    figures = form_data.get('figures', [])
+    if figures:
+        print(f"Processing {len(figures)} figures from figures array", file=sys.stderr)
+        
+        # Add figures as a separate section or integrate them into existing sections
+        for fig_idx, figure in enumerate(figures, 1):
+            try:
+                # Create figure caption
+                caption_text = figure.get('caption', f'Figure {fig_idx}')
+                caption = doc.add_paragraph(f"FIG. {fig_idx}: {sanitize_text(caption_text).upper()}")
+                caption.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                caption.paragraph_format.space_before = Pt(6)
+                caption.paragraph_format.space_after = Pt(3)
+                if caption.runs:
+                    caption.runs[0].font.name = 'Times New Roman'
+                    caption.runs[0].font.size = Pt(9)
+                    caption.runs[0].bold = True
+                    caption.runs[0].italic = False
+                
+                # Process figure image
+                size = figure.get('size', 'medium')
+                size_mapping = {
+                    'very-small': Inches(1.5),
+                    'small': Inches(2.0),
+                    'medium': Inches(2.5),
+                    'large': Inches(3.3125)
+                }
+                width = size_mapping.get(size, Inches(2.5))
+                
+                # Get image data
+                image_data = figure.get('data', '')
+                if image_data:
+                    # Handle base64 data - remove prefix if present
+                    if ',' in image_data:
+                        image_data = image_data.split(',')[1]
+                    
+                    # Decode base64 image data
+                    image_bytes = base64.b64decode(image_data)
+                    image_stream = BytesIO(image_bytes)
+                    
+                    # Add image to document
+                    para = doc.add_paragraph()
+                    para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                    run = para.add_run()
+                    picture = run.add_picture(image_stream, width=width)
+                    
+                    # Scale if height > 4", preserve aspect ratio
+                    if picture.height > Inches(4.0):
+                        scale_factor = Inches(4.0) / picture.height
+                        run.clear()
+                        run.add_picture(image_stream, width=width * scale_factor, height=Inches(4.0))
+                    
+                    # Set proper spacing
+                    para.paragraph_format.space_before = Pt(3)
+                    para.paragraph_format.space_after = Pt(12)
+                    
+                    print(f"Successfully processed figure {fig_idx}: {figure.get('originalName', 'Unknown')}", file=sys.stderr)
+                else:
+                    print(f"Warning: Figure {fig_idx} has no image data", file=sys.stderr)
+                    
+            except Exception as e:
+                print(f"Error processing figure {fig_idx}: {e}", file=sys.stderr)
+                continue
     
     # Add references with EXACT IEEE LaTeX formatting
     add_references(doc, form_data.get('references', []))
@@ -2329,6 +2394,13 @@ def pandoc_html_to_docx(html, template_path=None):
     try:
         import pypandoc
         
+        # Check if pandoc is available
+        try:
+            pypandoc.get_pandoc_version()
+        except OSError as e:
+            print(f"⚠️ Pandoc binary not available ({e}), using HTML-to-DOCX converter", file=sys.stderr)
+            return html_to_docx_converter(html)
+        
         # Create temporary HTML file
         with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False, encoding='utf-8') as temp_html:
             temp_html.write(html)
@@ -2374,10 +2446,101 @@ def pandoc_html_to_docx(html, template_path=None):
                 pass
                 
     except ImportError:
-        print("⚠️ pypandoc not available, falling back to original DOCX generator", file=sys.stderr)
-        return None
+        print("⚠️ pypandoc not available, using HTML-to-DOCX converter", file=sys.stderr)
+        return html_to_docx_converter(html)
     except Exception as e:
-        print(f"⚠️ pypandoc conversion failed ({e}), falling back to original DOCX generator", file=sys.stderr)
+        print(f"⚠️ pypandoc conversion failed ({e}), using HTML-to-DOCX converter", file=sys.stderr)
+        return html_to_docx_converter(html)
+
+def html_to_docx_converter(html):
+    """Convert HTML to DOCX using python-docx and BeautifulSoup - no external dependencies"""
+    try:
+        from bs4 import BeautifulSoup
+        from docx import Document
+        from docx.shared import Pt, Inches
+        from docx.enum.text import WD_ALIGN_PARAGRAPH
+        import re
+        
+        print("🔄 Converting HTML to DOCX using python-docx converter...", file=sys.stderr)
+        
+        # Parse HTML
+        soup = BeautifulSoup(html, 'html.parser')
+        
+        # Create new document
+        doc = Document()
+        
+        # Set document margins (IEEE standard)
+        for section in doc.sections:
+            section.left_margin = Inches(0.75)
+            section.right_margin = Inches(0.75)
+            section.top_margin = Inches(0.75)
+            section.bottom_margin = Inches(0.75)
+        
+        # Process HTML elements
+        def process_element(element, parent_doc):
+            if element.name == 'h1':
+                # Title
+                para = parent_doc.add_heading(element.get_text().strip(), level=0)
+                para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                if para.runs:
+                    para.runs[0].font.name = 'Times New Roman'
+                    para.runs[0].font.size = Pt(24)
+                    para.runs[0].bold = True
+                    
+            elif element.name == 'h2':
+                # Section heading
+                para = parent_doc.add_heading(element.get_text().strip(), level=1)
+                if para.runs:
+                    para.runs[0].font.name = 'Times New Roman'
+                    para.runs[0].font.size = Pt(10)
+                    para.runs[0].bold = True
+                    
+            elif element.name == 'p':
+                # Paragraph
+                text = element.get_text().strip()
+                if text:
+                    para = parent_doc.add_paragraph(text)
+                    if para.runs:
+                        para.runs[0].font.name = 'Times New Roman'
+                        para.runs[0].font.size = Pt(10)
+                    
+                    # Check for special classes
+                    if 'ieee-abstract' in element.get('class', []):
+                        if para.runs:
+                            para.runs[0].font.size = Pt(9)
+                            para.runs[0].bold = True
+                    elif 'ieee-keywords' in element.get('class', []):
+                        if para.runs:
+                            para.runs[0].font.size = Pt(9)
+                            para.runs[0].bold = True
+                    elif 'ieee-reference' in element.get('class', []):
+                        if para.runs:
+                            para.runs[0].font.size = Pt(9)
+                            
+            elif element.name == 'div':
+                # Process div contents
+                for child in element.children:
+                    if hasattr(child, 'name'):
+                        process_element(child, parent_doc)
+        
+        # Process body content
+        body = soup.find('body')
+        if body:
+            for child in body.children:
+                if hasattr(child, 'name'):
+                    process_element(child, doc)
+        
+        # Generate DOCX bytes
+        buffer = BytesIO()
+        doc.save(buffer)
+        buffer.seek(0)
+        docx_bytes = buffer.getvalue()
+        
+        print(f"✅ HTML-to-DOCX conversion completed: {len(docx_bytes)} bytes", file=sys.stderr)
+        return docx_bytes
+        
+    except Exception as e:
+        print(f"❌ HTML-to-DOCX converter failed: {e}", file=sys.stderr)
         return None
 
 def generate_ieee_pdf_perfect_justification(form_data):

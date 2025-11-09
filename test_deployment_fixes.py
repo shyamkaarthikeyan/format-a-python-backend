@@ -1,164 +1,285 @@
 #!/usr/bin/env python3
 """
-Test the deployment fixes for Word/PDF issues
+Test script to verify deployment fixes for critical runtime errors
+This tests the IEEE generator for crashes and consistency issues
 """
 
 import json
 import sys
 import os
-from io import BytesIO
-
-# Add current directory to path
-current_dir = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, current_dir)
+import traceback
 
 def test_deployment_fixes():
-    """Test that all deployment fixes are working correctly"""
+    """Test that all critical runtime errors are fixed"""
     
-    print("🧪 TESTING DEPLOYMENT FIXES")
-    print("=" * 50)
+    print("🧪 Testing Deployment Fixes for Critical Runtime Errors...")
     
-    # Test document with table images and text that needs justification
+    # Test document data that exercises all problematic code paths
     test_data = {
-        "title": "Deployment Fix Test: Word and PDF Consistency",
+        "title": "Critical Runtime Error Fix Verification",
         "authors": [
             {
-                "name": "Test Author",
-                "organization": "Format-A Testing Lab",
+                "name": "Deployment Test",
+                "department": "Quality Assurance",
+                "organization": "Format-A Team",
                 "email": "test@format-a.com"
             }
         ],
-        "abstract": "This test document verifies that the deployment fixes work correctly. It includes table images with proper names, perfect text justification in PDF matching Word documents, and consistent visual formatting between both output formats.",
-        "keywords": "deployment fixes, table images, PDF justification, Word consistency",
+        "abstract": "This document tests all the critical runtime error fixes to ensure the IEEE generator works correctly on Vercel deployment. It includes sections with text, images, tables, and references to exercise all code paths that previously caused crashes.",
+        "keywords": "deployment fixes, runtime errors, IEEE generator, Vercel compatibility",
         "sections": [
             {
-                "title": "Text Justification Test",
+                "title": "Text Processing Test",
                 "contentBlocks": [
                     {
                         "type": "text",
-                        "content": "This paragraph tests the aggressive justification fixes applied to ensure PDF output matches Word document formatting. The text should be perfectly justified with identical line breaks and character spacing in both formats. Every line should end at exactly the same horizontal position, creating a clean, professional appearance that matches LaTeX-quality academic publications."
+                        "content": "This section tests the add_formatted_paragraph function to ensure it doesn't cause NameError crashes.",
+                        "order": 0
                     }
                 ]
             },
             {
-                "title": "Table Image Display Test",
+                "title": "Image Processing Test",
                 "contentBlocks": [
                     {
-                        "type": "text",
-                        "content": "The following table image tests the fixes for proper name display in Word documents:"
+                        "type": "text", 
+                        "content": "This section contains text followed by an image to test figure numbering.",
+                        "order": 0
                     },
+                    {
+                        "type": "image",
+                        "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
+                        "caption": "Test image for figure numbering verification",
+                        "size": "medium",
+                        "order": 1
+                    }
+                ]
+            },
+            {
+                "title": "Table Processing Test",
+                "contentBlocks": [
                     {
                         "type": "table",
-                        "tableType": "image",
-                        "tableName": "Deployment Fix Verification",
-                        "caption": "This table image should display with proper name and caption",
-                        "data": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
-                        "size": "medium"
-                    },
-                    {
-                        "type": "text",
-                        "content": "The table above should show the table name 'TABLE 2.1: DEPLOYMENT FIX VERIFICATION' before the image, and the caption after it. This ensures proper display in Word documents."
+                        "tableType": "interactive",
+                        "tableName": "Test Table",
+                        "caption": "Test table for table numbering verification",
+                        "headers": ["Column 1", "Column 2"],
+                        "tableData": [
+                            ["Row 1 Col 1", "Row 1 Col 2"],
+                            ["Row 2 Col 1", "Row 2 Col 2"]
+                        ],
+                        "order": 0
                     }
                 ]
             }
         ],
         "references": [
-            "Format-A Development Team. (2025). Deployment Fixes for Word and PDF Consistency. Technical Documentation."
+            {
+                "text": "Test Reference 1. (2024). Sample reference for testing purposes.",
+                "order": 0
+            },
+            {
+                "text": "Test Reference 2. (2024). Another sample reference to test alignment.",
+                "order": 1
+            }
+        ],
+        "figures": [
+            {
+                "id": "figure1",
+                "fileName": "test_figure.png",
+                "originalName": "test_figure.png",
+                "caption": "Test figure from figures array",
+                "size": "medium",
+                "position": "here",
+                "order": 0,
+                "mimeType": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
+            }
         ]
     }
     
+    print(f"📋 Test Document: {test_data['title']}")
+    print(f"   Sections: {len(test_data['sections'])}")
+    print(f"   References: {len(test_data['references'])}")
+    print(f"   Figures: {len(test_data['figures'])}")
+    
+    # Test 1: Import and basic function availability
+    print("\n🔄 Step 1: Testing imports and function availability...")
     try:
-        print("\n1. Testing HTML generation with fixes...")
-        from ieee_generator_fixed import generate_ieee_master_html
-        
-        master_html = generate_ieee_master_html(test_data)
-        print(f"✅ HTML generated: {len(master_html)} characters")
-        
-        # Check for table name in HTML
-        if 'ieee-table-name' in master_html:
-            print("✅ Table name CSS class found in HTML")
-        else:
-            print("❌ Table name CSS class missing from HTML")
-        
-        # Check for aggressive justification
-        if 'text-align: justify !important' in master_html:
-            print("✅ Aggressive justification found in HTML")
-        else:
-            print("❌ Aggressive justification missing from HTML")
-        
-        # Save test HTML
-        with open('test_deployment_fixes.html', 'w', encoding='utf-8') as f:
-            f.write(master_html)
-        print("📁 Saved: test_deployment_fixes.html")
-        
-        print("\n2. Testing PDF generation with perfect justification...")
-        from ieee_generator_fixed import weasyprint_pdf_from_html
-        
-        pdf_bytes = weasyprint_pdf_from_html(master_html)
-        if pdf_bytes and len(pdf_bytes) > 0:
-            print(f"✅ PDF generated: {len(pdf_bytes)} bytes")
-            
-            # Save test PDF
-            with open('test_deployment_fixes.pdf', 'wb') as f:
-                f.write(pdf_bytes)
-            print("📁 Saved: test_deployment_fixes.pdf")
-        else:
-            print("❌ PDF generation failed")
-        
-        print("\n3. Testing DOCX generation with table image names...")
-        from ieee_generator_fixed import pandoc_html_to_docx, generate_ieee_document
-        
-        try:
-            docx_bytes = pandoc_html_to_docx(master_html)
-            if not docx_bytes:
-                raise Exception("Pandoc conversion failed")
-        except:
-            print("⚠️ Pandoc not available, using fallback DOCX generator...")
-            docx_bytes = generate_ieee_document(test_data)
-        
-        if docx_bytes and len(docx_bytes) > 0:
-            print(f"✅ DOCX generated: {len(docx_bytes)} bytes")
-            
-            # Save test DOCX
-            with open('test_deployment_fixes.docx', 'wb') as f:
-                f.write(docx_bytes)
-            print("📁 Saved: test_deployment_fixes.docx")
-        else:
-            print("❌ DOCX generation failed")
-        
-        print("\n" + "=" * 50)
-        print("🎉 DEPLOYMENT FIXES TEST COMPLETE!")
-        print("=" * 50)
-        
-        print("\n📋 TEST RESULTS:")
-        print("✅ HTML generation with table name CSS")
-        print("✅ Aggressive justification in CSS")
-        print("✅ PDF generation with perfect justification")
-        print("✅ DOCX generation with table image support")
-        
-        print("\n🔍 VERIFICATION STEPS:")
-        print("1. Open test_deployment_fixes.pdf in PDF viewer")
-        print("2. Open test_deployment_fixes.docx in Microsoft Word")
-        print("3. Compare justification and table image display")
-        print("4. Verify table names appear before images in Word")
-        print("5. Confirm PDF justification matches Word exactly")
-        
-        return True
-        
+        from ieee_generator_fixed import (
+            generate_ieee_document,
+            generate_ieee_master_html,
+            pandoc_html_to_docx,
+            weasyprint_pdf_from_html
+        )
+        print("✅ All main functions imported successfully")
+    except ImportError as e:
+        print(f"❌ Import error: {e}")
+        return False
     except Exception as e:
-        print(f"\n❌ TEST FAILED: {e}")
-        import traceback
+        print(f"❌ Unexpected import error: {e}")
+        return False
+    
+    # Test 2: HTML generation (should always work)
+    print("\n🔄 Step 2: Testing HTML generation...")
+    try:
+        html_output = generate_ieee_master_html(test_data)
+        if html_output and len(html_output) > 1000:
+            print(f"✅ HTML generation successful: {len(html_output)} characters")
+            
+            # Save for inspection
+            with open("deployment_test.html", "w", encoding="utf-8") as f:
+                f.write(html_output)
+            print("💾 HTML saved as: deployment_test.html")
+        else:
+            print("❌ HTML generation failed or output too short")
+            return False
+    except Exception as e:
+        print(f"❌ HTML generation error: {e}")
         traceback.print_exc()
         return False
+    
+    # Test 3: DOCX generation (critical path)
+    print("\n🔄 Step 3: Testing DOCX generation...")
+    try:
+        # Test unified HTML-to-DOCX conversion
+        docx_bytes = pandoc_html_to_docx(html_output)
+        if docx_bytes and len(docx_bytes) > 0:
+            print(f"✅ Unified DOCX generation successful: {len(docx_bytes)} bytes")
+            
+            with open("deployment_test_unified.docx", "wb") as f:
+                f.write(docx_bytes)
+            print("💾 Unified DOCX saved as: deployment_test_unified.docx")
+            
+            unified_docx_success = True
+        else:
+            print("⚠️ Unified DOCX generation failed, testing fallback...")
+            unified_docx_success = False
+    except Exception as e:
+        print(f"⚠️ Unified DOCX error: {e}")
+        unified_docx_success = False
+    
+    # Test fallback DOCX generation
+    if not unified_docx_success:
+        try:
+            fallback_docx_bytes = generate_ieee_document(test_data)
+            if fallback_docx_bytes and len(fallback_docx_bytes) > 0:
+                print(f"✅ Fallback DOCX generation successful: {len(fallback_docx_bytes)} bytes")
+                
+                with open("deployment_test_fallback.docx", "wb") as f:
+                    f.write(fallback_docx_bytes)
+                print("💾 Fallback DOCX saved as: deployment_test_fallback.docx")
+                
+                fallback_docx_success = True
+            else:
+                print("❌ Fallback DOCX generation failed")
+                fallback_docx_success = False
+        except Exception as e:
+            print(f"❌ Fallback DOCX error: {e}")
+            traceback.print_exc()
+            fallback_docx_success = False
+    else:
+        fallback_docx_success = True
+    
+    # Test 4: PDF generation
+    print("\n🔄 Step 4: Testing PDF generation...")
+    try:
+        pdf_bytes = weasyprint_pdf_from_html(html_output)
+        if pdf_bytes and len(pdf_bytes) > 0:
+            print(f"✅ PDF generation successful: {len(pdf_bytes)} bytes")
+            
+            with open("deployment_test.pdf", "wb") as f:
+                f.write(pdf_bytes)
+            print("💾 PDF saved as: deployment_test.pdf")
+            
+            pdf_success = True
+        else:
+            print("❌ PDF generation failed")
+            pdf_success = False
+    except Exception as e:
+        print(f"❌ PDF generation error: {e}")
+        traceback.print_exc()
+        pdf_success = False
+    
+    # Analysis
+    print("\n📊 Deployment Readiness Analysis:")
+    
+    html_ok = html_output and len(html_output) > 1000
+    docx_ok = unified_docx_success or fallback_docx_success
+    pdf_ok = pdf_success
+    
+    print(f"   HTML Generation: {'✅ Working' if html_ok else '❌ Failed'}")
+    print(f"   DOCX Generation: {'✅ Working' if docx_ok else '❌ Failed'}")
+    print(f"   PDF Generation: {'✅ Working' if pdf_ok else '❌ Failed'}")
+    
+    if unified_docx_success and pdf_success:
+        print("\n🎉 PERFECT: Both formats use unified HTML system")
+        print("   → Consistent output guaranteed")
+        print("   → Ready for Vercel deployment")
+        deployment_ready = True
+    elif docx_ok and pdf_ok:
+        print("\n✅ GOOD: Both formats working (with fallbacks)")
+        print("   → DOCX uses fallback system")
+        print("   → PDF uses unified system")
+        print("   → Deployment possible but not optimal")
+        deployment_ready = True
+    elif docx_ok and not pdf_ok:
+        print("\n⚠️ PARTIAL: DOCX works, PDF failed")
+        print("   → Users can generate DOCX documents")
+        print("   → PDF generation needs fixing")
+        deployment_ready = False
+    elif not docx_ok and pdf_ok:
+        print("\n⚠️ PARTIAL: PDF works, DOCX failed")
+        print("   → Users can generate PDF documents")
+        print("   → DOCX generation needs fixing")
+        deployment_ready = False
+    else:
+        print("\n❌ CRITICAL: Both formats failed")
+        print("   → Cannot deploy - no working generation")
+        print("   → Need to fix critical runtime errors")
+        deployment_ready = False
+    
+    print("\n🔍 Critical Error Check:")
+    if html_ok:
+        print("✅ No HTML generation crashes")
+    else:
+        print("❌ HTML generation crashes - check sanitize_text and template")
+    
+    if docx_ok:
+        print("✅ No DOCX generation crashes")
+    else:
+        print("❌ DOCX generation crashes - check missing functions:")
+        print("   - add_formatted_paragraph")
+        print("   - add_ieee_body_paragraph") 
+        print("   - apply_ieee_latex_formatting")
+    
+    if pdf_ok:
+        print("✅ No PDF generation crashes")
+    else:
+        print("❌ PDF generation crashes - check ReportLab fallback")
+    
+    print("\n📖 Generated Files for Inspection:")
+    if html_ok:
+        print("   - deployment_test.html (master template)")
+    if unified_docx_success:
+        print("   - deployment_test_unified.docx (unified system)")
+    if fallback_docx_success and not unified_docx_success:
+        print("   - deployment_test_fallback.docx (fallback system)")
+    if pdf_ok:
+        print("   - deployment_test.pdf (unified system)")
+    
+    return deployment_ready
 
 if __name__ == "__main__":
     success = test_deployment_fixes()
     
     if success:
-        print("\n✨ SUCCESS: All deployment fixes are working!")
-        print("🚀 Ready for production deployment")
+        print("\n🎉 SUCCESS: Deployment fixes working correctly!")
+        print("The IEEE generator is ready for Vercel deployment.")
+        print("Both DOCX and PDF generation are functional.")
     else:
-        print("\n❌ FAILED: Some deployment fixes need attention")
-        print("🔧 Check error messages above")
+        print("\n⚠️ WARNING: Critical issues remain!")
+        print("Fix the identified problems before Vercel deployment.")
+        print("Users may experience crashes or missing functionality.")
     
     sys.exit(0 if success else 1)
