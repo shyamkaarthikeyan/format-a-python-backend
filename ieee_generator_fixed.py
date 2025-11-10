@@ -642,38 +642,54 @@ def add_ieee_table(doc, table_data, section_idx, table_count):
                     f"Warning: Interactive table missing headers or data",
                     file=sys.stderr,
                 )
+                print(f"  Headers: {headers}", file=sys.stderr)
+                print(f"  Rows data: {rows_data}", file=sys.stderr)
+                print(f"  Table data keys: {list(table_data.keys())}", file=sys.stderr)
                 return
 
             # Create table with EXACT IEEE formatting - GUARANTEED TO APPEAR IN WORD
             num_cols = len(headers)
             num_rows = len(rows_data) + 1  # +1 for header row
 
+            print(f"Creating table with {num_rows} rows and {num_cols} columns", file=sys.stderr)
+
             table = doc.add_table(rows=num_rows, cols=num_cols)
             table.style = "Table Grid"
             table.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            table.allow_autofit = (
-                False  # CRITICAL: Prevent autofit for consistent appearance
-            )
+            table.allow_autofit = True  # CHANGED: Allow autofit for better visibility
 
-            # Set EXACT column widths - Full column width (4770 twips) divided equally
-            col_width = 4770 // num_cols  # Equal column distribution
+            # Set column widths in twips (integer values required)
+            available_width_twips = 6480  # ~4.5 inches in twips (6.5" - margins)
+            col_width_twips = available_width_twips // num_cols  # Integer division
+            min_width_twips = 1440  # 1 inch minimum in twips
+            
+            final_col_width = max(min_width_twips, col_width_twips)
+            
             for col in table.columns:
-                col.width = col_width
+                col.width = final_col_width
+                
+            print(f"Set column width to {final_col_width} twips for {num_cols} columns", file=sys.stderr)
 
             # HEADER ROW - Bold, centered, 9pt Times New Roman
             header_row = table.rows[0]
             for col_idx, header in enumerate(headers):
                 cell = header_row.cells[col_idx]
-                cell.text = sanitize_text(str(header))
-                cell.width = col_width  # Set individual cell width
-
+                
+                # Clear existing content and add new content
+                cell._element.clear_content()
+                para = cell.add_paragraph()
+                run = para.add_run(sanitize_text(str(header)))
+                
                 # EXACT IEEE header formatting: BOLD, CENTERED
-                for paragraph in cell.paragraphs:
-                    paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                    for run in paragraph.runs:
-                        run.font.name = "Times New Roman"
-                        run.font.size = Pt(9)  # 9pt font for tables
-                        run.bold = True  # BOLD headers
+                run.font.name = "Times New Roman"
+                run.font.size = Pt(9)  # 9pt font for tables
+                run.bold = True  # BOLD headers
+                para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                
+                # Add cell borders for visibility
+                cell._element.get_or_add_tcPr()
+                
+                print(f"Added header: {header}", file=sys.stderr)
 
             # DATA ROWS - Regular, left-aligned, 9pt Times New Roman
             for row_idx, row_data in enumerate(rows_data):
@@ -681,30 +697,28 @@ def add_ieee_table(doc, table_data, section_idx, table_count):
                 for col_idx, cell_data in enumerate(row_data):
                     if col_idx < num_cols:
                         cell = table_row.cells[col_idx]
-                        cell.text = sanitize_text(str(cell_data))
-                        cell.width = col_width  # Set individual cell width
-
+                        
+                        # Clear existing content and add new content
+                        cell._element.clear_content()
+                        para = cell.add_paragraph()
+                        run = para.add_run(sanitize_text(str(cell_data)))
+                        
                         # EXACT IEEE data formatting: REGULAR, LEFT-ALIGNED
-                        for paragraph in cell.paragraphs:
-                            paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
-                            for run in paragraph.runs:
-                                run.font.name = "Times New Roman"
-                                run.font.size = Pt(9)  # 9pt font for table data
-                                run.bold = False  # Regular weight for data
+                        run.font.name = "Times New Roman"
+                        run.font.size = Pt(9)  # 9pt font for table data
+                        run.bold = False  # Regular weight for data
+                        para.alignment = WD_ALIGN_PARAGRAPH.LEFT
+                        
+                        # Add cell borders for visibility
+                        cell._element.get_or_add_tcPr()
+                        
+                        print(f"Added data cell [{row_idx}][{col_idx}]: {cell_data}", file=sys.stderr)
 
             # TABLE SPACING - 6pt before/after (EXACT IEEE specification)
-            # Add spacing paragraph before table
-            spacing_before = doc.add_paragraph()
-            spacing_before.paragraph_format.space_after = Pt(6)
-
-            # Move table after spacing paragraph
-            table_element = table._element
-            spacing_element = spacing_before._element
-            spacing_element.addnext(table_element)
-
-            # Add spacing paragraph after table
+            # Add spacing paragraph after table (table is already added to document)
             spacing_after = doc.add_paragraph()
             spacing_after.paragraph_format.space_before = Pt(6)
+            spacing_after.paragraph_format.space_after = Pt(6)
 
         elif table_type == "image":
             # Handle image tables
@@ -955,6 +969,8 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
                 caption.runs[0].italic = False
 
             # Add the table (without caption since we added it above)
+            # Mark that caption was already added to prevent duplication
+            block["_caption_added"] = True
             add_ieee_table(doc, block, section_idx, table_count)
 
             # Check if this text block also has an image attached (React frontend pattern)
@@ -1012,55 +1028,48 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
                     )  # 12pt before (240 twips)
                     pre_pPr.append(pre_spacing_elem)
 
+                    # Add spacing before image to separate from text
+                    spacing_before = doc.add_paragraph()
+                    spacing_before.paragraph_format.space_after = Pt(18)
+                    
+                    # Create a dedicated paragraph for the image
                     para = doc.add_paragraph()
                     para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                    
+                    # Set paragraph spacing to ensure image is separated from text
+                    para.paragraph_format.space_before = Pt(12)
+                    para.paragraph_format.space_after = Pt(12)
+                    para.paragraph_format.keep_together = True
+                    para.paragraph_format.keep_with_next = True
 
-                    # AGGRESSIVE spacing to prevent text overlap
-                    para.paragraph_format.space_before = Pt(18)  # Large spacing before
-                    para.paragraph_format.space_after = Pt(18)  # Large spacing after
-                    para.paragraph_format.keep_together = True  # Keep image together
-                    para.paragraph_format.keep_with_next = True  # Keep with caption
-                    para.paragraph_format.page_break_before = (
-                        False  # Don't force page break
-                    )
-
-                    # Apply OpenXML paragraph properties for better control
-                    pPr = para._element.get_or_add_pPr()
-
-                    # Clear existing spacing
-                    for elem in pPr.xpath("./w:spacing"):
-                        pPr.remove(elem)
-
-                    # Add precise spacing control
-                    spacing_elem = OxmlElement("w:spacing")
-                    spacing_elem.set(qn("w:before"), "360")  # 18pt before (360 twips)
-                    spacing_elem.set(qn("w:after"), "360")  # 18pt after (360 twips)
-                    spacing_elem.set(qn("w:line"), "240")  # 12pt line spacing
-                    spacing_elem.set(qn("w:lineRule"), "exact")
-                    pPr.append(spacing_elem)
-
-                    # Add text wrapping and positioning controls
-                    keepNext = OxmlElement("w:keepNext")
-                    keepNext.set(qn("w:val"), "1")
-                    pPr.append(keepNext)
-
-                    keepLines = OxmlElement("w:keepLines")
-                    keepLines.set(qn("w:val"), "1")
-                    pPr.append(keepLines)
-
+                    # Add the image
                     run = para.add_run()
-                    picture = run.add_picture(image_stream, width=width)
-                    if picture.height > IEEE_CONFIG["max_figure_height"]:
-                        scale_factor = IEEE_CONFIG["max_figure_height"] / picture.height
-                        run.clear()
-                        image_stream.seek(
-                            0
-                        )  # CRITICAL: Reset stream position after clear()
-                        run.add_picture(
-                            image_stream,
-                            width=width * scale_factor,
-                            height=IEEE_CONFIG["max_figure_height"],
-                        )
+                    
+                    try:
+                        # Add image with proper sizing
+                        picture = run.add_picture(image_stream, width=width)
+                        
+                        # Scale down if too tall to prevent page overflow
+                        if picture.height > IEEE_CONFIG["max_figure_height"]:
+                            scale_factor = IEEE_CONFIG["max_figure_height"] / picture.height
+                            run.clear()
+                            image_stream.seek(0)  # Reset stream position
+                            picture = run.add_picture(
+                                image_stream,
+                                width=width * scale_factor,
+                                height=IEEE_CONFIG["max_figure_height"],
+                            )
+                        
+                        print(f"Added image with width: {width}, height: {picture.height}", file=sys.stderr)
+                        
+                    except Exception as img_error:
+                        print(f"Error adding image: {img_error}", file=sys.stderr)
+                        # Fallback: add text placeholder
+                        run.add_text(f"[Image: {block.get('caption', 'Figure')}]")
+                    
+                    # Add spacing after image before caption
+                    spacing_after = doc.add_paragraph()
+                    spacing_after.paragraph_format.space_after = Pt(6)
 
                     # Generate figure number based on section and image position (count only images)
                     img_count = sum(
