@@ -661,8 +661,53 @@ def add_ieee_table(doc, table_data, section_idx, table_count):
                     image_bytes = base64.b64decode(image_data)
                     image_stream = BytesIO(image_bytes)
                     
-                    # Add image with proper spacing
+                    # Add spacing paragraph BEFORE image to create buffer
+                    pre_spacing_para = doc.add_paragraph()
+                    pre_spacing_para.paragraph_format.space_after = Pt(24)  # Large buffer before image
+                    pre_spacing_para.paragraph_format.space_before = Pt(12)
+                    
+                    # Apply OpenXML spacing for precise control
+                    pre_pPr = pre_spacing_para._element.get_or_add_pPr()
+                    pre_spacing_elem = OxmlElement('w:spacing')
+                    pre_spacing_elem.set(qn('w:after'), '480')  # 24pt after (480 twips)
+                    pre_spacing_elem.set(qn('w:before'), '240')  # 12pt before (240 twips)
+                    pre_pPr.append(pre_spacing_elem)
+                    
+                    # Add image with enhanced spacing and positioning
                     para = doc.add_paragraph()
+                    para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                    
+                    # AGGRESSIVE spacing to prevent text overlap
+                    para.paragraph_format.space_before = Pt(18)  # Large spacing before
+                    para.paragraph_format.space_after = Pt(18)   # Large spacing after
+                    para.paragraph_format.keep_together = True   # Keep image together
+                    para.paragraph_format.keep_with_next = True  # Keep with caption
+                    para.paragraph_format.page_break_before = False  # Don't force page break
+                    
+                    # Apply OpenXML paragraph properties for better control
+                    pPr = para._element.get_or_add_pPr()
+                    
+                    # Clear existing spacing
+                    for elem in pPr.xpath('./w:spacing'):
+                        pPr.remove(elem)
+                    
+                    # Add precise spacing control
+                    spacing_elem = OxmlElement('w:spacing')
+                    spacing_elem.set(qn('w:before'), '360')  # 18pt before (360 twips)
+                    spacing_elem.set(qn('w:after'), '360')   # 18pt after (360 twips)
+                    spacing_elem.set(qn('w:line'), '240')    # 12pt line spacing
+                    spacing_elem.set(qn('w:lineRule'), 'exact')
+                    pPr.append(spacing_elem)
+                    
+                    # Add text wrapping and positioning controls
+                    keepNext = OxmlElement('w:keepNext')
+                    keepNext.set(qn('w:val'), '1')
+                    pPr.append(keepNext)
+                    
+                    keepLines = OxmlElement('w:keepLines')
+                    keepLines.set(qn('w:val'), '1')
+                    pPr.append(keepLines)
+                    
                     run = para.add_run()
                     
                     # Size based on table size setting
@@ -681,9 +726,17 @@ def add_ieee_table(doc, table_data, section_idx, table_count):
                         image_stream.seek(0)  # CRITICAL: Reset stream position after clear()
                         run.add_picture(image_stream, width=width * scale_factor, height=IEEE_CONFIG['max_figure_height'])
                     
-                    para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                    para.paragraph_format.space_before = Pt(6)
-                    para.paragraph_format.space_after = Pt(6)
+                    # Add LARGE spacing paragraph after image to prevent overlap
+                    post_spacing_para = doc.add_paragraph()
+                    post_spacing_para.paragraph_format.space_after = Pt(24)  # Large buffer after image
+                    post_spacing_para.paragraph_format.space_before = Pt(12)
+                    
+                    # Add OpenXML spacing control for better positioning
+                    post_pPr = post_spacing_para._element.get_or_add_pPr()
+                    post_spacing_elem = OxmlElement('w:spacing')
+                    post_spacing_elem.set(qn('w:after'), '480')  # 24pt after (480 twips)
+                    post_spacing_elem.set(qn('w:before'), '240')  # 12pt before (240 twips)
+                    post_pPr.append(post_spacing_elem)
                     
                 except Exception as e:
                     print(f"Error processing table image: {e}", file=sys.stderr)
@@ -840,14 +893,51 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
                     # Create image stream
                     image_stream = BytesIO(image_bytes)
                     
+                    # Add spacing paragraph BEFORE image to create buffer
+                    pre_spacing_para = doc.add_paragraph()
+                    pre_spacing_para.paragraph_format.space_after = Pt(24)  # Large buffer before image
+                    pre_spacing_para.paragraph_format.space_before = Pt(12)
+                    
+                    # Apply OpenXML spacing for precise control
+                    pre_pPr = pre_spacing_para._element.get_or_add_pPr()
+                    pre_spacing_elem = OxmlElement('w:spacing')
+                    pre_spacing_elem.set(qn('w:after'), '480')  # 24pt after (480 twips)
+                    pre_spacing_elem.set(qn('w:before'), '240')  # 12pt before (240 twips)
+                    pre_pPr.append(pre_spacing_elem)
+                    
                     para = doc.add_paragraph()
                     para.alignment = WD_ALIGN_PARAGRAPH.CENTER
                     
-                    # Add proper spacing to prevent text overlap
-                    para.paragraph_format.space_before = Pt(12)  # Increased spacing
-                    para.paragraph_format.space_after = Pt(12)   # Increased spacing
+                    # AGGRESSIVE spacing to prevent text overlap
+                    para.paragraph_format.space_before = Pt(18)  # Large spacing before
+                    para.paragraph_format.space_after = Pt(18)   # Large spacing after
                     para.paragraph_format.keep_together = True   # Keep image together
                     para.paragraph_format.keep_with_next = True  # Keep with caption
+                    para.paragraph_format.page_break_before = False  # Don't force page break
+                    
+                    # Apply OpenXML paragraph properties for better control
+                    pPr = para._element.get_or_add_pPr()
+                    
+                    # Clear existing spacing
+                    for elem in pPr.xpath('./w:spacing'):
+                        pPr.remove(elem)
+                    
+                    # Add precise spacing control
+                    spacing_elem = OxmlElement('w:spacing')
+                    spacing_elem.set(qn('w:before'), '360')  # 18pt before (360 twips)
+                    spacing_elem.set(qn('w:after'), '360')   # 18pt after (360 twips)
+                    spacing_elem.set(qn('w:line'), '240')    # 12pt line spacing
+                    spacing_elem.set(qn('w:lineRule'), 'exact')
+                    pPr.append(spacing_elem)
+                    
+                    # Add text wrapping and positioning controls
+                    keepNext = OxmlElement('w:keepNext')
+                    keepNext.set(qn('w:val'), '1')
+                    pPr.append(keepNext)
+                    
+                    keepLines = OxmlElement('w:keepLines')
+                    keepLines.set(qn('w:val'), '1')
+                    pPr.append(keepLines)
                     
                     run = para.add_run()
                     picture = run.add_picture(image_stream, width=width)
@@ -861,13 +951,25 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
                     img_count = sum(1 for b in content_blocks[:block_idx+1] if b.get('type') == 'image')
                     caption = doc.add_paragraph(f"FIG. {section_idx}.{img_count}: {sanitize_text(block['caption']).upper()}")
                     caption.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                    caption.paragraph_format.space_before = Pt(0)
-                    caption.paragraph_format.space_after = Pt(12)
+                    caption.paragraph_format.space_before = Pt(6)
+                    caption.paragraph_format.space_after = Pt(18)  # Increased spacing after caption
                     if caption.runs:
                         caption.runs[0].font.name = 'Times New Roman'
                         caption.runs[0].font.size = Pt(9)
                         caption.runs[0].bold = True  # IEEE standard: figure captions are bold
                         caption.runs[0].italic = False
+                    
+                    # Add LARGE spacing paragraph after caption to prevent overlap
+                    post_spacing_para = doc.add_paragraph()
+                    post_spacing_para.paragraph_format.space_after = Pt(24)  # Large buffer after image
+                    post_spacing_para.paragraph_format.space_before = Pt(12)
+                    
+                    # Add OpenXML spacing control for better positioning
+                    post_pPr = post_spacing_para._element.get_or_add_pPr()
+                    post_spacing_elem = OxmlElement('w:spacing')
+                    post_spacing_elem.set(qn('w:after'), '480')  # 24pt after (480 twips)
+                    post_spacing_elem.set(qn('w:before'), '240')  # 12pt before (240 twips)
+                    post_pPr.append(post_spacing_elem)
                 except Exception as e:
                     print(f"Error processing image in text block: {e}", file=sys.stderr)
                     
@@ -917,15 +1019,54 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
                 # Create image stream
                 image_stream = BytesIO(image_bytes)
                 
-                # PERFECT IMAGE BLOCK - Center image, set spacing, keep with caption
+                # ENHANCED IMAGE BLOCK - Prevent text overlap with aggressive spacing and positioning
+                
+                # Add spacing paragraph BEFORE image to create buffer
+                pre_spacing_para = doc.add_paragraph()
+                pre_spacing_para.paragraph_format.space_after = Pt(24)  # Large buffer before image
+                pre_spacing_para.paragraph_format.space_before = Pt(12)
+                
+                # Apply OpenXML spacing for precise control
+                pre_pPr = pre_spacing_para._element.get_or_add_pPr()
+                pre_spacing_elem = OxmlElement('w:spacing')
+                pre_spacing_elem.set(qn('w:after'), '480')  # 24pt after (480 twips)
+                pre_spacing_elem.set(qn('w:before'), '240')  # 12pt before (240 twips)
+                pre_pPr.append(pre_spacing_elem)
+                
+                # Create image paragraph with enhanced positioning
                 para = doc.add_paragraph()
                 para.alignment = WD_ALIGN_PARAGRAPH.CENTER  # CENTER IMAGE
                 
-                # Add proper spacing to prevent text overlap
-                para.paragraph_format.space_before = Pt(12)  # Increased spacing
-                para.paragraph_format.space_after = Pt(12)   # Increased spacing
+                # AGGRESSIVE spacing to prevent text overlap
+                para.paragraph_format.space_before = Pt(18)  # Large spacing before
+                para.paragraph_format.space_after = Pt(18)   # Large spacing after
                 para.paragraph_format.keep_together = True   # Keep image together
                 para.paragraph_format.keep_with_next = True  # Keep with caption
+                para.paragraph_format.page_break_before = False  # Don't force page break
+                
+                # Apply OpenXML paragraph properties for better control
+                pPr = para._element.get_or_add_pPr()
+                
+                # Clear existing spacing
+                for elem in pPr.xpath('./w:spacing'):
+                    pPr.remove(elem)
+                
+                # Add precise spacing control
+                spacing_elem = OxmlElement('w:spacing')
+                spacing_elem.set(qn('w:before'), '360')  # 18pt before (360 twips)
+                spacing_elem.set(qn('w:after'), '360')   # 18pt after (360 twips)
+                spacing_elem.set(qn('w:line'), '240')    # 12pt line spacing
+                spacing_elem.set(qn('w:lineRule'), 'exact')
+                pPr.append(spacing_elem)
+                
+                # Add text wrapping and positioning controls
+                keepNext = OxmlElement('w:keepNext')
+                keepNext.set(qn('w:val'), '1')
+                pPr.append(keepNext)
+                
+                keepLines = OxmlElement('w:keepLines')
+                keepLines.set(qn('w:val'), '1')
+                pPr.append(keepLines)
                 
                 run = para.add_run()
                 picture = run.add_picture(image_stream, width=width)
@@ -937,17 +1078,17 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
                     image_stream.seek(0)  # CRITICAL: Reset stream position after clear()
                     run.add_picture(image_stream, width=width * scale_factor, height=Inches(4.0))
                 
-                # Add ENHANCED spacing paragraph after image to prevent overlap
-                spacing_para = doc.add_paragraph()
-                spacing_para.paragraph_format.space_after = Pt(18)  # Increased from 6pt
-                spacing_para.paragraph_format.space_before = Pt(0)
+                # Add LARGE spacing paragraph after image to prevent overlap
+                post_spacing_para = doc.add_paragraph()
+                post_spacing_para.paragraph_format.space_after = Pt(24)  # Large buffer after image
+                post_spacing_para.paragraph_format.space_before = Pt(12)
                 
                 # Add OpenXML spacing control for better positioning
-                pPr = spacing_para._element.get_or_add_pPr()
-                spacing_elem = OxmlElement('w:spacing')
-                spacing_elem.set(qn('w:after'), '360')  # 18pt after (360 twips)
-                spacing_elem.set(qn('w:before'), '0')
-                pPr.append(spacing_elem)
+                post_pPr = post_spacing_para._element.get_or_add_pPr()
+                post_spacing_elem = OxmlElement('w:spacing')
+                post_spacing_elem.set(qn('w:after'), '480')  # 24pt after (480 twips)
+                post_spacing_elem.set(qn('w:before'), '240')  # 12pt before (240 twips)
+                post_pPr.append(post_spacing_elem)
             except Exception as e:
                 print(f"Error processing image: {e}", file=sys.stderr)
 
