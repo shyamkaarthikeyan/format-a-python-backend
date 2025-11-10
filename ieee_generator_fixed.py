@@ -634,7 +634,8 @@ def add_ieee_table(doc, table_data, section_idx, table_count):
         if table_type == "interactive":
             # Handle interactive tables with headers and data - MUST APPEAR IN WORD
             headers = table_data.get("headers", [])
-            rows_data = table_data.get("tableData", [])
+            # Support both 'tableData' (frontend) and 'rows' (model) formats
+            rows_data = table_data.get("tableData", []) or table_data.get("rows", [])
 
             if not headers or not rows_data:
                 print(
@@ -1240,6 +1241,51 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
                 post_pPr.append(post_spacing_elem)
             except Exception as e:
                 print(f"Error processing image: {e}", file=sys.stderr)
+
+        elif block.get("type") == "equation" and block.get("content"):
+            # Handle equation blocks
+            equation_content = sanitize_text(block.get("content", ""))
+            equation_number = block.get("equationNumber", "")
+            
+            # Add equation paragraph with center alignment
+            para = doc.add_paragraph()
+            para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            para.paragraph_format.space_before = Pt(12)
+            para.paragraph_format.space_after = Pt(12)
+            
+            # Add equation content with number if provided
+            if equation_number:
+                run = para.add_run(f"({equation_number}) {equation_content}")
+            else:
+                run = para.add_run(equation_content)
+            
+            run.font.name = "Times New Roman"
+            run.font.size = Pt(10)
+            run.italic = True  # IEEE equations are typically italic
+
+        elif block.get("type") == "subsection":
+            # Handle subsection blocks
+            subsection_title = sanitize_text(block.get("title", ""))
+            subsection_content = sanitize_text(block.get("content", ""))
+            
+            if subsection_title:
+                # Add subsection heading
+                para = doc.add_heading(subsection_title, level=3)
+                para.paragraph_format.page_break_before = False
+                para.paragraph_format.space_before = Pt(12)
+                para.paragraph_format.space_after = Pt(6)
+                para.paragraph_format.keep_with_next = True
+            
+            if subsection_content:
+                # Add subsection content
+                add_formatted_paragraph(
+                    doc,
+                    subsection_content,
+                    indent_left=IEEE_CONFIG["column_indent"],
+                    indent_right=IEEE_CONFIG["column_indent"],
+                    space_before=Pt(3),
+                    space_after=Pt(12),
+                )
 
     # Legacy support for old content field - EXACT same as test.py
     if not content_blocks and section_data.get("content"):
@@ -2323,6 +2369,18 @@ def build_document_model(form_data):
                     }
                 }
                 section_data["content_blocks"].append(image_block_data)
+            
+            elif block_type == "equation" and block.get("content"):
+                equation_data = {
+                    "type": "equation",
+                    "content": sanitize_text(block["content"]),
+                    "number": block.get("equationNumber", ""),
+                    "font_size": "10pt",
+                    "text_align": "center",
+                    "margin": "12pt 0",
+                    "font_style": "italic"
+                }
+                section_data["content_blocks"].append(equation_data)
         
         model["sections"].append(section_data)
     
@@ -2547,6 +2605,24 @@ def render_to_html(model):
             break-before: avoid;
         }}
         
+        /* EQUATIONS - IEEE formatting */
+        .ieee-equation-container {{
+            margin: 12pt 0;
+            text-align: center;
+            break-inside: avoid;
+            page-break-inside: avoid;
+        }}
+        
+        .ieee-equation {{
+            font-size: 10pt;
+            font-style: italic;
+            display: inline-block;
+            padding: 6pt 12pt;
+            background-color: #f9f9f9;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }}
+        
         /* REFERENCES - Exact hanging indent */
         .ieee-reference {{
             font-size: 9pt;
@@ -2685,6 +2761,16 @@ def render_to_html(model):
                 html += f'<img src="data:image/png;base64,{block["data"]}" class="ieee-image" style="width: {block["width"]};" alt="Figure {block["number"]}" />'
                 if block["caption"]["text"]:
                     html += f'<div class="ieee-figure-caption">{block["caption"]["prefix"]}{block["caption"]["text"].upper()}</div>'
+                html += '</div>'
+            
+            elif block["type"] == "equation":
+                html += '<div class="ieee-equation-container">'
+                equation_content = block["content"]
+                equation_number = block.get("number", "")
+                if equation_number:
+                    html += f'<div class="ieee-equation">({equation_number}) {equation_content}</div>'
+                else:
+                    html += f'<div class="ieee-equation">{equation_content}</div>'
                 html += '</div>'
     
     # Add references

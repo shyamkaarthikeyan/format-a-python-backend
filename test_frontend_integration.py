@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Test frontend integration with standalone tables and figures
+Test script to verify frontend integration with all content types
 """
 
 import json
@@ -13,185 +13,272 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from ieee_generator_fixed import build_document_model, render_to_html, generate_ieee_document
 
 def test_frontend_integration():
-    """Test with data structure that matches frontend"""
-    print("🧪 TESTING FRONTEND INTEGRATION")
-    print("=" * 50)
+    """Test all content types as they would come from the frontend"""
+    print("🧪 TESTING FRONTEND INTEGRATION - ALL CONTENT TYPES")
+    print("=" * 60)
     
-    # Data structure that matches what frontend now sends
-    frontend_data = {
-        "title": "Frontend Integration Test",
+    # Create test data that matches frontend structure
+    test_data = {
+        "title": "Frontend Integration Test Document",
         "authors": [
-            {"name": "Test Author", "department": "Computer Science", "email": "test@example.com"}
+            {"name": "Frontend User", "department": "Computer Science", "email": "user@university.edu"}
         ],
-        "abstract": "This tests the integration between frontend table/figure forms and backend processing.",
-        "keywords": "frontend, backend, tables, figures, integration",
+        "abstract": "This document tests all content types from the frontend interface.",
+        "keywords": "frontend, integration, tables, images, equations, subsections",
         "sections": [
             {
                 "id": "section1",
-                "title": "Content Section",
+                "title": "Interactive Content Types",
                 "contentBlocks": [
                     {
                         "id": "text1",
                         "type": "text",
-                        "content": "This section contains content blocks from sections.",
+                        "content": "This section demonstrates all interactive content types available in the frontend.",
                         "order": 1
+                    },
+                    {
+                        "id": "table1",
+                        "type": "table",
+                        "tableType": "interactive",
+                        "tableName": "Performance Data",
+                        "caption": "System performance comparison across different algorithms",
+                        "headers": ["Algorithm", "Speed (ms)", "Accuracy (%)", "Memory (MB)"],
+                        "tableData": [
+                            ["Algorithm A", "150", "95.2", "128"],
+                            ["Algorithm B", "200", "97.8", "256"],
+                            ["Algorithm C", "120", "93.1", "64"],
+                            ["Algorithm D", "180", "96.5", "192"]
+                        ],
+                        "size": "large",
+                        "rows": 4,
+                        "columns": 4,
+                        "order": 2
+                    },
+                    {
+                        "id": "image1",
+                        "type": "image",
+                        "caption": "System Architecture Diagram",
+                        "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==",
+                        "size": "large",
+                        "originalName": "architecture.png",
+                        "mimeType": "image/png",
+                        "order": 3
+                    },
+                    {
+                        "id": "equation1",
+                        "type": "equation",
+                        "content": "E = mc²",
+                        "equationNumber": "1",
+                        "order": 4
+                    },
+                    {
+                        "id": "subsection1",
+                        "type": "subsection",
+                        "title": "Implementation Details",
+                        "content": "This subsection provides detailed implementation information for the proposed system.",
+                        "order": 5
+                    },
+                    {
+                        "id": "equation2",
+                        "type": "equation",
+                        "content": "F = ma",
+                        "equationNumber": "2",
+                        "order": 6
                     }
                 ],
                 "order": 1
-            }
-        ],
-        "references": [],
-        "figures": [
-            {
-                "id": "fig1",
-                "fileName": "standalone_figure.png",
-                "originalName": "standalone_figure.png",
-                "caption": "Standalone Figure from Figure Form",
-                "size": "medium",
-                "position": "here",
-                "order": 1,
-                "mimeType": "image/png",
-                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg=="
-            }
-        ],
-        "tables": [
-            {
-                "id": "table1",
-                "type": "interactive",
-                "tableType": "interactive",
-                "tableName": "Standalone Table",
-                "caption": "Table from Table Form",
-                "size": "medium",
-                "position": "here",
-                "order": 1,
-                "headers": ["Parameter", "Value", "Unit"],
-                "tableData": [
-                    ["Temperature", "25", "°C"],
-                    ["Pressure", "1013", "hPa"],
-                    ["Humidity", "60", "%"]
-                ]
             },
             {
-                "id": "table2", 
-                "type": "image",
-                "tableType": "image",
-                "tableName": "Image Table",
-                "caption": "Table as Image",
-                "size": "large",
-                "position": "here",
-                "order": 2,
+                "id": "section2",
+                "title": "Advanced Content Types",
+                "contentBlocks": [
+                    {
+                        "id": "text2",
+                        "type": "text",
+                        "content": "This section demonstrates more advanced content combinations.",
+                        "order": 1
+                    },
+                    {
+                        "id": "table2",
+                        "type": "table",
+                        "tableType": "image",
+                        "tableName": "Image Table",
+                        "caption": "Visual representation of data",
+                        "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==",
+                        "size": "medium",
+                        "originalName": "table_image.png",
+                        "mimeType": "image/png",
+                        "order": 2
+                    },
+                    {
+                        "id": "subsection2",
+                        "type": "subsection",
+                        "title": "Results Analysis",
+                        "content": "The results show significant improvements in performance metrics.",
+                        "order": 3
+                    },
+                    {
+                        "id": "equation3",
+                        "type": "equation",
+                        "content": "∫₀^∞ e^(-x²) dx = √π/2",
+                        "equationNumber": "3",
+                        "order": 4
+                    }
+                ],
+                "order": 2
+            }
+        ],
+        "references": [
+            {"id": "ref1", "text": "Smith, J. et al. 'Advanced Document Generation.' IEEE Transactions, 2023.", "order": 1},
+            {"id": "ref2", "text": "Johnson, A. 'Frontend Integration Patterns.' ACM Computing Surveys, 2023.", "order": 2}
+        ],
+        # Test standalone tables and figures (as they come from frontend forms)
+        "tables": [
+            {
+                "id": "standalone_table1",
+                "type": "interactive",
+                "tableType": "interactive",
+                "tableName": "Standalone Performance Table",
+                "caption": "This table was created using the table form interface",
+                "headers": ["Metric", "Value", "Unit", "Status"],
+                "tableData": [
+                    ["CPU Usage", "45", "%", "Normal"],
+                    ["Memory Usage", "2.1", "GB", "Normal"],
+                    ["Disk I/O", "120", "MB/s", "High"],
+                    ["Network", "50", "Mbps", "Normal"]
+                ],
+                "size": "medium",
+                "rows": 4,
+                "columns": 4,
+                "order": 1
+            }
+        ],
+        "figures": [
+            {
+                "id": "standalone_fig1",
+                "caption": "Standalone Performance Graph",
                 "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==",
+                "size": "large",
+                "originalName": "performance_graph.png",
                 "mimeType": "image/png",
-                "originalName": "table_image.png"
+                "order": 1
             }
         ]
     }
     
     try:
         print("📋 Building document model...")
-        model = build_document_model(frontend_data)
+        model = build_document_model(test_data)
         
-        # Analyze the model
+        print("📊 Analyzing model structure:")
         sections = model.get("sections", [])
-        print(f"📊 Model Analysis:")
-        print(f"  • Sections: {len(sections)}")
         
+        total_content_blocks = 0
         total_tables = 0
         total_images = 0
+        total_equations = 0
+        total_subsections = 0
         
         for i, section in enumerate(sections):
-            blocks = section.get("content_blocks", [])
-            section_tables = [b for b in blocks if b.get("type") in ["table", "table_image"]]
-            section_images = [b for b in blocks if b.get("type") == "figure"]
+            content_blocks = section.get("content_blocks", [])
+            total_content_blocks += len(content_blocks)
             
-            print(f"  • Section {i+1}: '{section.get('title', 'Untitled')}'")
-            print(f"    - Content blocks: {len(blocks)}")
-            print(f"    - Tables: {len(section_tables)}")
-            print(f"    - Images: {len(section_images)}")
+            print(f"  Section {i+1}: '{section.get('title', 'Untitled')}'")
+            print(f"    - Content blocks: {len(content_blocks)}")
             
-            for j, table in enumerate(section_tables):
-                print(f"      Table {j+1}: {table.get('type')} - Number: {table.get('number', 'no number')}")
-                if table.get("caption", {}).get("text"):
-                    print(f"        Caption: {table['caption']['text']}")
-            
-            for j, image in enumerate(section_images):
-                print(f"      Image {j+1}: {image.get('type')} - Number: {image.get('number', 'no number')}")
-                if image.get("caption", {}).get("text"):
-                    print(f"        Caption: {image['caption']['text']}")
-            
-            total_tables += len(section_tables)
-            total_images += len(section_images)
+            for j, block in enumerate(content_blocks):
+                block_type = block.get("type", "unknown")
+                print(f"      Block {j+1}: {block_type}")
+                
+                if block_type in ["table", "table_image"]:
+                    total_tables += 1
+                    print(f"        - Table type: {block.get('table_type', 'not set')}")
+                    if block.get('headers'):
+                        print(f"        - Headers: {len(block['headers'])} columns")
+                    if block.get('caption', {}).get('text'):
+                        caption_text = block['caption']['text'][:50]
+                        print(f"        - Caption: {caption_text}{'...' if len(caption_text) > 50 else ''}")
+                elif block_type == "figure":
+                    total_images += 1
+                    if block.get('caption', {}).get('text'):
+                        caption_text = block['caption']['text'][:50]
+                        print(f"        - Caption: {caption_text}{'...' if len(caption_text) > 50 else ''}")
+                elif block_type == "equation":
+                    total_equations += 1
+                    content = block.get("content", "")[:30]
+                    print(f"        - Content: {content}{'...' if len(content) > 30 else ''}")
+                    if block.get("number"):
+                        print(f"        - Number: {block['number']}")
+                elif block_type == "paragraph":
+                    content = block.get("text", "")[:50]
+                    print(f"        - Text: {content}{'...' if len(content) > 50 else ''}")
         
-        print(f"\n📊 Total Content:")
-        print(f"  • Tables processed: {total_tables}")
-        print(f"  • Images processed: {total_images}")
+        print(f"\n📊 Model Summary:")
+        print(f"  • Total content blocks: {total_content_blocks}")
+        print(f"  • Tables: {total_tables}")
+        print(f"  • Images: {total_images}")
+        print(f"  • Equations: {total_equations}")
+        print(f"  • Subsections: {total_subsections}")
         
-        # Render HTML
-        print("\n🌐 Rendering HTML...")
+        print("\n🌐 Rendering to HTML...")
         html = render_to_html(model)
         
-        # Check HTML content
-        html_tables = html.count('<table class="ieee-table">')
-        html_images = html.count('<img src="data:image/')
+        # Count different elements in HTML
+        html_table_count = html.count('<table')
+        html_image_count = html.count('<img')
+        html_equation_count = html.count('ieee-equation')
         
-        print(f"📊 HTML Content:")
-        print(f"  • HTML tables: {html_tables}")
-        print(f"  • HTML images: {html_images}")
+        print(f"📊 HTML Analysis:")
+        print(f"  • HTML tables: {html_table_count}")
+        print(f"  • HTML images: {html_image_count}")
+        print(f"  • HTML equations: {html_equation_count}")
+        print(f"  • HTML length: {len(html)} characters")
         
-        # Save HTML
-        with open("test_frontend_integration.html", "w", encoding="utf-8") as f:
+        # Save HTML for inspection
+        html_file = "test_frontend_integration.html"
+        with open(html_file, 'w', encoding='utf-8') as f:
             f.write(html)
-        print("📁 HTML saved: test_frontend_integration.html")
+        print(f"📁 HTML saved: {html_file}")
         
-        # Generate DOCX
         print("\n📄 Generating DOCX...")
-        docx_bytes = generate_ieee_document(frontend_data)
+        docx_bytes = generate_ieee_document(test_data)
         
-        with open("test_frontend_integration.docx", "wb") as f:
+        docx_file = "test_frontend_integration.docx"
+        with open(docx_file, 'wb') as f:
             f.write(docx_bytes)
-        print(f"📁 DOCX saved: test_frontend_integration.docx ({len(docx_bytes)} bytes)")
+        print(f"📁 DOCX saved: {docx_file} ({len(docx_bytes)} bytes)")
         
-        # Results
-        print(f"\n🎉 INTEGRATION TEST RESULTS:")
-        print("=" * 50)
+        print(f"\n🎉 FRONTEND INTEGRATION TEST COMPLETE!")
+        print("=" * 60)
+        print("Generated files:")
+        print(f"  • {html_file} - HTML preview")
+        print(f"  • {docx_file} - Word document")
         
-        expected_tables = len(frontend_data.get("tables", [])) 
-        expected_figures = len(frontend_data.get("figures", []))
-        
-        print(f"Expected from frontend:")
-        print(f"  • Standalone tables: {expected_tables}")
-        print(f"  • Standalone figures: {expected_figures}")
-        
-        print(f"Processed by backend:")
+        print(f"\n📊 Results Summary:")
+        print(f"  • Content blocks processed: {total_content_blocks}")
         print(f"  • Tables in model: {total_tables}")
         print(f"  • Images in model: {total_images}")
+        print(f"  • Equations in model: {total_equations}")
+        print(f"  • HTML tables rendered: {html_table_count}")
+        print(f"  • HTML images rendered: {html_image_count}")
+        print(f"  • HTML equations rendered: {html_equation_count}")
         
-        print(f"Rendered in HTML:")
-        print(f"  • HTML tables: {html_tables}")
-        print(f"  • HTML images: {html_images}")
-        
-        # Check if everything matches
-        # Note: Image tables appear as HTML images, not HTML tables
-        expected_interactive_tables = len([t for t in frontend_data.get("tables", []) if t.get("type") == "interactive"])
-        expected_total_images = expected_figures + len([t for t in frontend_data.get("tables", []) if t.get("type") == "image"])
-        
-        success = (
-            total_tables >= expected_tables and 
-            total_images >= expected_figures and
-            html_tables >= expected_interactive_tables and
-            html_images >= expected_total_images
-        )
+        # Check for consistency
+        success = True
+        if total_tables != html_table_count:
+            print(f"⚠️  WARNING: Table count mismatch - Model: {total_tables}, HTML: {html_table_count}")
+            success = False
+        if total_images != html_image_count:
+            print(f"⚠️  WARNING: Image count mismatch - Model: {total_images}, HTML: {html_image_count}")
+            success = False
+        if total_equations != html_equation_count:
+            print(f"⚠️  WARNING: Equation count mismatch - Model: {total_equations}, HTML: {html_equation_count}")
+            success = False
         
         if success:
-            print("✅ SUCCESS: Frontend integration working correctly!")
-            print("   - Standalone tables and figures are processed")
-            print("   - HTML rendering includes all content")
-            print("   - DOCX generation completed")
+            print("✅ SUCCESS: All content types processed correctly!")
         else:
-            print("❌ ISSUE: Some content not processed correctly")
-            print(f"   Expected: {expected_tables} tables, {expected_figures} figures")
-            print(f"   Got: {total_tables} tables, {total_images} images in model")
-            print(f"   HTML: {html_tables} tables, {html_images} images")
+            print("❌ ISSUES: Some content types have mismatches")
         
         return success
         
@@ -205,7 +292,7 @@ if __name__ == "__main__":
     print("🚀 Starting frontend integration test...")
     success = test_frontend_integration()
     if success:
-        print("✅ All tests passed!")
+        print("✅ Test completed successfully")
     else:
-        print("❌ Some tests failed!")
+        print("❌ Test failed")
         sys.exit(1)
