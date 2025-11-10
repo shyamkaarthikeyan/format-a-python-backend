@@ -485,11 +485,11 @@ def add_keywords(doc, keywords):
         pPr.append(spacing)
 
 def apply_ieee_latex_formatting(para, spacing_before=0, spacing_after=0, line_spacing=240):
-    """Apply EXACT IEEE LaTeX PDF formatting using low-level OpenXML editing - FORCE DISTRIBUTE JUSTIFICATION."""
+    """Apply PERFECT IEEE LaTeX PDF formatting with enhanced justification controls."""
     pPr = para._element.get_or_add_pPr()
     
     # Clear existing formatting first
-    for elem in pPr.xpath('./w:spacing | ./w:jc | ./w:adjustRightInd | ./w:snapToGrid'):
+    for elem in pPr.xpath('./w:spacing | ./w:jc | ./w:adjustRightInd | ./w:snapToGrid | ./w:textAlignment | ./w:suppressAutoHyphens'):
         pPr.remove(elem)
     
     # 1. FULL JUSTIFICATION = CONSISTENT WITH PDF OUTPUT
@@ -497,7 +497,17 @@ def apply_ieee_latex_formatting(para, spacing_before=0, spacing_after=0, line_sp
     jc.set(qn('w:val'), 'both')  # Use 'both' for consistent Word/PDF justification
     pPr.append(jc)
     
-    # 2. EXACT LINE SPACING (12pt = 240 twips) - MANDATORY EXACT RULE
+    # 2. ENHANCED TEXT DISTRIBUTION for better spacing
+    textAlignment = OxmlElement('w:textAlignment')
+    textAlignment.set(qn('w:val'), 'distribute')
+    pPr.append(textAlignment)
+    
+    # 3. ENABLE AUTOMATIC HYPHENATION for better line breaks
+    suppressAutoHyphens = OxmlElement('w:suppressAutoHyphens')
+    suppressAutoHyphens.set(qn('w:val'), '0')  # Enable hyphenation
+    pPr.append(suppressAutoHyphens)
+    
+    # 4. EXACT LINE SPACING (12pt = 240 twips) - MANDATORY EXACT RULE
     spacing = OxmlElement('w:spacing')
     spacing.set(qn('w:before'), str(spacing_before))
     spacing.set(qn('w:after'), str(spacing_after))
@@ -505,7 +515,7 @@ def apply_ieee_latex_formatting(para, spacing_before=0, spacing_after=0, line_sp
     spacing.set(qn('w:lineRule'), 'exact')  # EXACT rule for perfect IEEE spacing
     pPr.append(spacing)
     
-    # 3. ADVANCED JUSTIFICATION CONTROLS FOR PERFECT ALIGNMENT
+    # 5. ADVANCED JUSTIFICATION CONTROLS FOR PERFECT ALIGNMENT
     adjustRightInd = OxmlElement('w:adjustRightInd')
     adjustRightInd.set(qn('w:val'), '1')
     pPr.append(adjustRightInd)
@@ -513,9 +523,6 @@ def apply_ieee_latex_formatting(para, spacing_before=0, spacing_after=0, line_sp
     snapToGrid = OxmlElement('w:snapToGrid')
     snapToGrid.set(qn('w:val'), '0')
     pPr.append(snapToGrid)
-    
-    # 4. REMOVED CHARACTER-LEVEL OVERRIDES - They interfere with justification
-    # Let Word handle character spacing naturally for consistent PDF/Word output
 
 def setup_two_column_layout(doc):
     """ENSURE COLUMNS APPLY AFTER ABSTRACT - Setup TWO-COLUMN LAYOUT with EXACT IEEE LaTeX specifications."""
@@ -765,11 +772,11 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
             # FIXED: Handle table blocks from frontend with GUARANTEED captions
             table_count += 1
             
-            # FORCE table caption BEFORE table - FIX DUPLICATION
+            # FIXED: Handle table caption to prevent duplication
             caption_text = block.get('caption', '').strip()
             table_name = block.get('tableName', '').strip()
             
-            # Avoid duplication: use caption if available, otherwise tableName, otherwise default
+            # Smart caption selection to avoid duplication
             if caption_text and table_name:
                 # Check if one contains the other to avoid duplication
                 if table_name.lower() in caption_text.lower():
@@ -777,21 +784,27 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
                 elif caption_text.lower() in table_name.lower():
                     final_caption = table_name
                 else:
-                    final_caption = caption_text  # Prefer caption
+                    # Both exist and are different - prefer caption
+                    final_caption = caption_text
+            elif caption_text:
+                final_caption = caption_text
+            elif table_name:
+                final_caption = table_name
             else:
-                final_caption = caption_text or table_name or f'Data Table {table_count}'
+                final_caption = f'Data Table {table_count}'
             
+            # Add table caption ONCE
             caption = doc.add_paragraph(f"TABLE {section_idx}.{table_count}: {sanitize_text(final_caption).upper()}")
             caption.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            caption.paragraph_format.space_before = Pt(6)
-            caption.paragraph_format.space_after = Pt(3)
+            caption.paragraph_format.space_before = Pt(12)  # Increased spacing
+            caption.paragraph_format.space_after = Pt(6)
             if caption.runs:
                 caption.runs[0].font.name = 'Times New Roman'
                 caption.runs[0].font.size = Pt(9)
                 caption.runs[0].bold = True
                 caption.runs[0].italic = False
             
-            # Now add the table
+            # Add the table (without caption since we added it above)
             add_ieee_table(doc, block, section_idx, table_count)
             
             # Check if this text block also has an image attached (React frontend pattern)
@@ -924,9 +937,17 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
                     image_stream.seek(0)  # CRITICAL: Reset stream position after clear()
                     run.add_picture(image_stream, width=width * scale_factor, height=Inches(4.0))
                 
-                # Add additional spacing paragraph after image to prevent overlap
+                # Add ENHANCED spacing paragraph after image to prevent overlap
                 spacing_para = doc.add_paragraph()
-                spacing_para.paragraph_format.space_after = Pt(6)
+                spacing_para.paragraph_format.space_after = Pt(18)  # Increased from 6pt
+                spacing_para.paragraph_format.space_before = Pt(0)
+                
+                # Add OpenXML spacing control for better positioning
+                pPr = spacing_para._element.get_or_add_pPr()
+                spacing_elem = OxmlElement('w:spacing')
+                spacing_elem.set(qn('w:after'), '360')  # 18pt after (360 twips)
+                spacing_elem.set(qn('w:before'), '0')
+                pPr.append(spacing_elem)
             except Exception as e:
                 print(f"Error processing image: {e}", file=sys.stderr)
 
@@ -1516,17 +1537,29 @@ def generate_ieee_document(form_data):
                     image_bytes = base64.b64decode(image_data)
                     image_stream = BytesIO(image_bytes)
                     
-                    # Add image to document with proper spacing to prevent overlap
+                    # Add image to document with ENHANCED spacing to prevent overlap
                     para = doc.add_paragraph()
                     para.alignment = WD_ALIGN_PARAGRAPH.CENTER
                     
-                    # Add spacing before image to prevent overlap with text
-                    para.paragraph_format.space_before = Pt(12)  # Increased spacing
-                    para.paragraph_format.space_after = Pt(12)   # Increased spacing
+                    # ENHANCED spacing before image to prevent overlap with text
+                    para.paragraph_format.space_before = Pt(18)  # Increased from 12pt
+                    para.paragraph_format.space_after = Pt(18)   # Increased from 12pt
                     
-                    # Ensure paragraph doesn't break across columns
+                    # Ensure paragraph doesn't break across columns and stays together
                     para.paragraph_format.keep_together = True
                     para.paragraph_format.keep_with_next = True
+                    para.paragraph_format.page_break_before = False
+                    
+                    # Add column break control to prevent text wrapping issues
+                    pPr = para._element.get_or_add_pPr()
+                    
+                    # Add spacing control via OpenXML for better positioning
+                    spacing = OxmlElement('w:spacing')
+                    spacing.set(qn('w:before'), '360')  # 18pt before (360 twips)
+                    spacing.set(qn('w:after'), '360')   # 18pt after (360 twips)
+                    spacing.set(qn('w:beforeAutospacing'), '0')
+                    spacing.set(qn('w:afterAutospacing'), '0')
+                    pPr.append(spacing)
                     
                     run = para.add_run()
                     picture = run.add_picture(image_stream, width=width)
@@ -1538,9 +1571,17 @@ def generate_ieee_document(form_data):
                         image_stream.seek(0)  # CRITICAL: Reset stream position after clear()
                         run.add_picture(image_stream, width=width * scale_factor, height=Inches(4.0))
                     
-                    # Add additional spacing paragraph after image to prevent overlap
+                    # Add ENHANCED spacing paragraph after image to prevent overlap
                     spacing_para = doc.add_paragraph()
-                    spacing_para.paragraph_format.space_after = Pt(6)
+                    spacing_para.paragraph_format.space_after = Pt(18)  # Increased from 6pt
+                    spacing_para.paragraph_format.space_before = Pt(0)
+                    
+                    # Add OpenXML spacing control for better positioning
+                    pPr = spacing_para._element.get_or_add_pPr()
+                    spacing_elem = OxmlElement('w:spacing')
+                    spacing_elem.set(qn('w:after'), '360')  # 18pt after (360 twips)
+                    spacing_elem.set(qn('w:before'), '0')
+                    pPr.append(spacing_elem)
                     
                     print(f"Successfully processed figure {fig_idx}: {figure.get('originalName', 'Unknown')}", file=sys.stderr)
                 else:
@@ -2234,7 +2275,7 @@ def weasyprint_pdf_from_html(html):
                 font-feature-settings: "liga" 1, "kern" 1;
             }
             
-            /* ENHANCED FULL JUSTIFICATION - Force perfect text alignment */
+            /* PERFECT FULL JUSTIFICATION - Force perfect text alignment */
             body, p, div, .ieee-paragraph, .ieee-abstract, .ieee-keywords, .ieee-reference, .ieee-section, .ieee-body {
                 text-align: justify !important;
                 text-align-last: justify !important;
@@ -2246,8 +2287,11 @@ def weasyprint_pdf_from_html(html):
                 word-break: normal !important;
                 overflow-wrap: break-word !important;
                 line-height: 1.2 !important;
-                word-spacing: 0.1em !important;
-                letter-spacing: 0.02em !important;
+                word-spacing: 0.08em !important;
+                letter-spacing: 0.01em !important;
+                text-rendering: optimizeLegibility !important;
+                font-variant-ligatures: common-ligatures !important;
+                font-feature-settings: "liga" 1, "kern" 1 !important;
             }
             
             /* WeasyPrint specific justification enhancements */
