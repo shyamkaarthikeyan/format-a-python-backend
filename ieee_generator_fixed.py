@@ -694,29 +694,8 @@ def add_ieee_table(doc, table_data, section_idx, table_count):
                 para.paragraph_format.space_before = Pt(6)
                 para.paragraph_format.space_after = Pt(6)
         
-        # Add table caption - FIXED: Ensure caption appears for all table types
-        caption_text = table_data.get('caption', table_data.get('tableName', ''))
-        if caption_text:
-            caption = doc.add_paragraph(f"TABLE {section_idx}.{table_count}: {sanitize_text(caption_text).upper()}")
-            caption.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            caption.paragraph_format.space_before = Pt(6)
-            caption.paragraph_format.space_after = Pt(12)
-            if caption.runs:
-                caption.runs[0].font.name = 'Times New Roman'
-                caption.runs[0].font.size = Pt(9)
-                caption.runs[0].bold = True  # IEEE standard: table captions are bold
-                caption.runs[0].italic = False
-        else:
-            # Add default caption if none provided
-            caption = doc.add_paragraph(f"TABLE {section_idx}.{table_count}: DATA TABLE")
-            caption.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            caption.paragraph_format.space_before = Pt(6)
-            caption.paragraph_format.space_after = Pt(12)
-            if caption.runs:
-                caption.runs[0].font.name = 'Times New Roman'
-                caption.runs[0].font.size = Pt(9)
-                caption.runs[0].bold = True
-                caption.runs[0].italic = False
+        # Note: Table caption is added by the calling function (add_section)
+        # to prevent duplicate captions. This function only handles the table content.
         
         # Add spacing after table to prevent overlap
         spacing = doc.add_paragraph()
@@ -786,9 +765,23 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
             # FIXED: Handle table blocks from frontend with GUARANTEED captions
             table_count += 1
             
-            # FORCE table caption BEFORE table
-            caption_text = block.get('caption', block.get('tableName', f'Data Table {table_count}'))
-            caption = doc.add_paragraph(f"TABLE {section_idx}.{table_count}: {sanitize_text(caption_text).upper()}")
+            # FORCE table caption BEFORE table - FIX DUPLICATION
+            caption_text = block.get('caption', '').strip()
+            table_name = block.get('tableName', '').strip()
+            
+            # Avoid duplication: use caption if available, otherwise tableName, otherwise default
+            if caption_text and table_name:
+                # Check if one contains the other to avoid duplication
+                if table_name.lower() in caption_text.lower():
+                    final_caption = caption_text
+                elif caption_text.lower() in table_name.lower():
+                    final_caption = table_name
+                else:
+                    final_caption = caption_text  # Prefer caption
+            else:
+                final_caption = caption_text or table_name or f'Data Table {table_count}'
+            
+            caption = doc.add_paragraph(f"TABLE {section_idx}.{table_count}: {sanitize_text(final_caption).upper()}")
             caption.alignment = WD_ALIGN_PARAGRAPH.CENTER
             caption.paragraph_format.space_before = Pt(6)
             caption.paragraph_format.space_after = Pt(3)
@@ -835,6 +828,14 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
                     image_stream = BytesIO(image_bytes)
                     
                     para = doc.add_paragraph()
+                    para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                    
+                    # Add proper spacing to prevent text overlap
+                    para.paragraph_format.space_before = Pt(12)  # Increased spacing
+                    para.paragraph_format.space_after = Pt(12)   # Increased spacing
+                    para.paragraph_format.keep_together = True   # Keep image together
+                    para.paragraph_format.keep_with_next = True  # Keep with caption
+                    
                     run = para.add_run()
                     picture = run.add_picture(image_stream, width=width)
                     if picture.height > IEEE_CONFIG['max_figure_height']:
@@ -842,10 +843,6 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
                         run.clear()
                         image_stream.seek(0)  # CRITICAL: Reset stream position after clear()
                         run.add_picture(image_stream, width=width * scale_factor, height=IEEE_CONFIG['max_figure_height'])
-                    
-                    para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                    para.paragraph_format.space_before = Pt(6)
-                    para.paragraph_format.space_after = Pt(6)
                     
                     # Generate figure number based on section and image position (count only images)
                     img_count = sum(1 for b in content_blocks[:block_idx+1] if b.get('type') == 'image')
@@ -910,6 +907,13 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
                 # PERFECT IMAGE BLOCK - Center image, set spacing, keep with caption
                 para = doc.add_paragraph()
                 para.alignment = WD_ALIGN_PARAGRAPH.CENTER  # CENTER IMAGE
+                
+                # Add proper spacing to prevent text overlap
+                para.paragraph_format.space_before = Pt(12)  # Increased spacing
+                para.paragraph_format.space_after = Pt(12)   # Increased spacing
+                para.paragraph_format.keep_together = True   # Keep image together
+                para.paragraph_format.keep_with_next = True  # Keep with caption
+                
                 run = para.add_run()
                 picture = run.add_picture(image_stream, width=width)
                 
@@ -920,13 +924,9 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
                     image_stream.seek(0)  # CRITICAL: Reset stream position after clear()
                     run.add_picture(image_stream, width=width * scale_factor, height=Inches(4.0))
                 
-                # EXACT IEEE image spacing
-                para.paragraph_format.space_before = Pt(3)   # 3pt before
-                para.paragraph_format.space_after = Pt(12)   # 12pt after
-                
-                # PREVENT OVERLAP - add spacing after figure block
-                spacing = doc.add_paragraph()
-                spacing.paragraph_format.space_after = Pt(6)  # 6pt spacing to prevent overlap
+                # Add additional spacing paragraph after image to prevent overlap
+                spacing_para = doc.add_paragraph()
+                spacing_para.paragraph_format.space_after = Pt(6)
             except Exception as e:
                 print(f"Error processing image: {e}", file=sys.stderr)
 
@@ -1516,9 +1516,18 @@ def generate_ieee_document(form_data):
                     image_bytes = base64.b64decode(image_data)
                     image_stream = BytesIO(image_bytes)
                     
-                    # Add image to document
+                    # Add image to document with proper spacing to prevent overlap
                     para = doc.add_paragraph()
                     para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                    
+                    # Add spacing before image to prevent overlap with text
+                    para.paragraph_format.space_before = Pt(12)  # Increased spacing
+                    para.paragraph_format.space_after = Pt(12)   # Increased spacing
+                    
+                    # Ensure paragraph doesn't break across columns
+                    para.paragraph_format.keep_together = True
+                    para.paragraph_format.keep_with_next = True
+                    
                     run = para.add_run()
                     picture = run.add_picture(image_stream, width=width)
                     
@@ -1529,9 +1538,9 @@ def generate_ieee_document(form_data):
                         image_stream.seek(0)  # CRITICAL: Reset stream position after clear()
                         run.add_picture(image_stream, width=width * scale_factor, height=Inches(4.0))
                     
-                    # Set proper spacing
-                    para.paragraph_format.space_before = Pt(3)
-                    para.paragraph_format.space_after = Pt(12)
+                    # Add additional spacing paragraph after image to prevent overlap
+                    spacing_para = doc.add_paragraph()
+                    spacing_para.paragraph_format.space_after = Pt(6)
                     
                     print(f"Successfully processed figure {fig_idx}: {figure.get('originalName', 'Unknown')}", file=sys.stderr)
                 else:
@@ -1846,9 +1855,22 @@ def generate_ieee_master_html(form_data):
                         sections_html += '</table>'
                         
                         # Table caption
-                        caption = block.get('caption', block.get('tableName', ''))
-                        if caption:
-                            sections_html += f'<div class="ieee-table-caption">TABLE {section_idx}.{table_count}: {sanitize_text(caption).upper()}</div>'
+                        # Fix table caption duplication
+                        caption_text = block.get('caption', '').strip()
+                        table_name = block.get('tableName', '').strip()
+                        
+                        if caption_text and table_name:
+                            if table_name.lower() in caption_text.lower():
+                                final_caption = caption_text
+                            elif caption_text.lower() in table_name.lower():
+                                final_caption = table_name
+                            else:
+                                final_caption = caption_text
+                        else:
+                            final_caption = caption_text or table_name
+                        
+                        if final_caption:
+                            sections_html += f'<div class="ieee-table-caption">TABLE {section_idx}.{table_count}: {sanitize_text(final_caption).upper()}</div>'
                         
                         sections_html += '</div>'
                 
@@ -2199,7 +2221,7 @@ def weasyprint_pdf_from_html(html):
         # Create font configuration for better typography
         font_config = FontConfiguration()
         
-        # Additional CSS for even better PDF rendering
+        # Additional CSS for perfect PDF justification
         additional_css = CSS(string="""
             @page {
                 size: letter;
@@ -2212,10 +2234,36 @@ def weasyprint_pdf_from_html(html):
                 font-feature-settings: "liga" 1, "kern" 1;
             }
             
-            .ieee-paragraph, .ieee-abstract, .ieee-keywords, .ieee-reference {
-                text-align-last: left;
-                word-break: normal;
-                overflow-wrap: break-word;
+            /* ENHANCED FULL JUSTIFICATION - Force perfect text alignment */
+            body, p, div, .ieee-paragraph, .ieee-abstract, .ieee-keywords, .ieee-reference, .ieee-section, .ieee-body {
+                text-align: justify !important;
+                text-align-last: justify !important;
+                text-justify: inter-word !important;
+                hyphens: auto !important;
+                -webkit-hyphens: auto !important;
+                -moz-hyphens: auto !important;
+                -ms-hyphens: auto !important;
+                word-break: normal !important;
+                overflow-wrap: break-word !important;
+                line-height: 1.2 !important;
+                word-spacing: 0.1em !important;
+                letter-spacing: 0.02em !important;
+            }
+            
+            /* WeasyPrint specific justification enhancements */
+            body, p, div {
+                -weasy-text-align-last: justify !important;
+                -weasy-hyphens: auto !important;
+            }
+            
+            /* Override any center/left alignment except for specific elements */
+            * {
+                text-align: justify !important;
+            }
+            
+            /* Keep these elements centered */
+            .ieee-title, .ieee-authors, .ieee-section-title, .ieee-table-caption, .ieee-figure-caption, h1, h2, h3 {
+                text-align: center !important;
             }
         """)
         
@@ -2639,9 +2687,22 @@ def generate_ieee_pdf_perfect_justification(form_data):
                     sections_html += f'<div class="ieee-image-container">'
                     sections_html += f'<img src="data:image/png;base64,{image_data}" class="ieee-image ieee-image-{block.get("size", "medium")}" />'
                     
-                    caption = block.get('caption', block.get('tableName', ''))
-                    if caption:
-                        sections_html += f'<div class="ieee-table-caption">TABLE {i}.{table_count}: {sanitize_text(caption).upper()}</div>'
+                    # Fix table caption duplication
+                    caption_text = block.get('caption', '').strip()
+                    table_name = block.get('tableName', '').strip()
+                    
+                    if caption_text and table_name:
+                        if table_name.lower() in caption_text.lower():
+                            final_caption = caption_text
+                        elif caption_text.lower() in table_name.lower():
+                            final_caption = table_name
+                        else:
+                            final_caption = caption_text
+                    else:
+                        final_caption = caption_text or table_name
+                    
+                    if final_caption:
+                        sections_html += f'<div class="ieee-table-caption">TABLE {i}.{table_count}: {sanitize_text(final_caption).upper()}</div>'
                     
                     sections_html += '</div>'
             
@@ -2891,10 +2952,15 @@ def generate_ieee_pdf_perfect_justification(form_data):
                 font-feature-settings: "liga" 1, "kern" 1;
             }
             
-            .ieee-paragraph, .ieee-abstract, .ieee-keywords, .ieee-reference {
-                text-align-last: left;
+            /* FORCE FULL JUSTIFICATION - Match Word document justification */
+            .ieee-paragraph, .ieee-abstract, .ieee-keywords, .ieee-reference, p {
+                text-align: justify !important;
+                text-align-last: justify !important;
+                text-justify: inter-word !important;
+                hyphens: auto !important;
                 word-break: normal;
                 overflow-wrap: break-word;
+                line-height: 1.2 !important;
             }
         """)
         
