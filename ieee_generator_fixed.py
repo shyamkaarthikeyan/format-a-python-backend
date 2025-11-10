@@ -1664,7 +1664,17 @@ def generate_ieee_html_preview(form_data):
                 margin: 0.75in;
                 background: white;
                 color: black;
-                text-align: justify;
+                text-align: justify !important;
+                text-align-last: justify !important;
+                text-justify: inter-word !important;
+                hyphens: auto !important;
+                -webkit-hyphens: auto !important;
+                -moz-hyphens: auto !important;
+                -ms-hyphens: auto !important;
+                word-spacing: 0.08em !important;
+                letter-spacing: 0.01em !important;
+                text-rendering: optimizeLegibility !important;
+                font-variant-ligatures: common-ligatures !important;
             }}
             .ieee-title {{
                 font-size: 24pt;
@@ -1680,7 +1690,15 @@ def generate_ieee_html_preview(form_data):
             }}
             .ieee-section {{
                 margin: 15px 0;
-                text-align: justify;
+                text-align: justify !important;
+                text-align-last: justify !important;
+                text-justify: inter-word !important;
+                hyphens: auto !important;
+                -webkit-hyphens: auto !important;
+                -moz-hyphens: auto !important;
+                -ms-hyphens: auto !important;
+                word-spacing: 0.08em !important;
+                letter-spacing: 0.01em !important;
             }}
             .ieee-abstract-title {{
                 font-weight: bold;
@@ -1714,6 +1732,15 @@ def generate_ieee_html_preview(form_data):
             }}
             .content-block {{
                 margin: 10px 0;
+                text-align: justify !important;
+                text-align-last: justify !important;
+                text-justify: inter-word !important;
+                hyphens: auto !important;
+                -webkit-hyphens: auto !important;
+                -moz-hyphens: auto !important;
+                -ms-hyphens: auto !important;
+                word-spacing: 0.08em !important;
+                letter-spacing: 0.01em !important;
             }}
             .figure-caption {{
                 font-size: 9pt;
@@ -1996,7 +2023,7 @@ def generate_ieee_master_html(form_data):
             color: black;
             background: white;
             
-            /* AGGRESSIVE PERFECT JUSTIFICATION - Force LaTeX quality */
+            /* ULTRA-AGGRESSIVE PERFECT JUSTIFICATION - Force LaTeX quality */
             text-align: justify !important;
             text-justify: distribute !important;
             text-align-last: justify !important;
@@ -2005,12 +2032,14 @@ def generate_ieee_master_html(form_data):
             -moz-hyphens: auto !important;
             -ms-hyphens: auto !important;
             
-            /* AGGRESSIVE character spacing for perfect line endings */
-            letter-spacing: -0.03em !important;
-            word-spacing: 0.08em !important;
+            /* ULTRA-AGGRESSIVE character spacing for perfect line endings */
+            letter-spacing: 0.02em !important;
+            word-spacing: 0.12em !important;
             
             /* WeasyPrint specific justification */
-            -weasy-text-align-last: justify;
+            -weasy-text-align-last: justify !important;
+            -weasy-text-justify: distribute !important;
+            -weasy-hyphens: auto !important;
             
             /* Typography controls */
             text-rendering: optimizeLegibility;
@@ -2100,7 +2129,7 @@ def generate_ieee_master_html(form_data):
             word-spacing: 0;
         }}
         
-        /* PARAGRAPHS - perfect justification */
+        /* PARAGRAPHS - ultra-aggressive justification */
         .ieee-paragraph {{
             font-size: 10pt;
             margin: 0 0 12px 0;
@@ -2108,13 +2137,15 @@ def generate_ieee_master_html(form_data):
             text-justify: distribute !important;
             text-align-last: justify !important;
             hyphens: auto !important;
-            letter-spacing: -0.03em !important;
-            word-spacing: 0.08em !important;
+            letter-spacing: 0.02em !important;
+            word-spacing: 0.12em !important;
             orphans: 2;
             widows: 2;
             
-            /* WeasyPrint specific */
-            -weasy-text-align-last: justify;
+            /* WeasyPrint specific - ultra-aggressive */
+            -weasy-text-align-last: justify !important;
+            -weasy-text-justify: distribute !important;
+            -weasy-hyphens: auto !important;
         }}
         
         /* TABLES - exact IEEE formatting */
@@ -2275,11 +2306,11 @@ def weasyprint_pdf_from_html(html):
                 font-feature-settings: "liga" 1, "kern" 1;
             }
             
-            /* PERFECT FULL JUSTIFICATION - Force perfect text alignment */
-            body, p, div, .ieee-paragraph, .ieee-abstract, .ieee-keywords, .ieee-reference, .ieee-section, .ieee-body {
+            /* ULTRA-AGGRESSIVE FULL JUSTIFICATION - Force LaTeX-quality text alignment */
+            body, p, div, .ieee-paragraph, .ieee-abstract, .ieee-keywords, .ieee-reference, .ieee-section, .ieee-body, .ieee-two-column {
                 text-align: justify !important;
                 text-align-last: justify !important;
-                text-justify: inter-word !important;
+                text-justify: distribute !important;
                 hyphens: auto !important;
                 -webkit-hyphens: auto !important;
                 -moz-hyphens: auto !important;
@@ -2287,17 +2318,18 @@ def weasyprint_pdf_from_html(html):
                 word-break: normal !important;
                 overflow-wrap: break-word !important;
                 line-height: 1.2 !important;
-                word-spacing: 0.08em !important;
-                letter-spacing: 0.01em !important;
+                word-spacing: 0.12em !important;
+                letter-spacing: 0.02em !important;
                 text-rendering: optimizeLegibility !important;
                 font-variant-ligatures: common-ligatures !important;
                 font-feature-settings: "liga" 1, "kern" 1 !important;
             }
             
             /* WeasyPrint specific justification enhancements */
-            body, p, div {
+            body, p, div, .ieee-paragraph, .ieee-abstract, .ieee-keywords, .ieee-reference {
                 -weasy-text-align-last: justify !important;
                 -weasy-hyphens: auto !important;
+                -weasy-text-justify: distribute !important;
             }
             
             /* Override any center/left alignment except for specific elements */
@@ -2306,8 +2338,15 @@ def weasyprint_pdf_from_html(html):
             }
             
             /* Keep these elements centered */
-            .ieee-title, .ieee-authors, .ieee-section-title, .ieee-table-caption, .ieee-figure-caption, h1, h2, h3 {
+            .ieee-title, .ieee-authors, .ieee-section-title, .ieee-table-caption, .ieee-figure-caption, h1, h2, h3, .ieee-heading, .ieee-authors-container, .ieee-authors-row, .ieee-author {
                 text-align: center !important;
+            }
+            
+            /* Force justify on all text containers */
+            .ieee-two-column > * {
+                text-align: justify !important;
+                text-align-last: justify !important;
+                text-justify: distribute !important;
             }
         """)
         
