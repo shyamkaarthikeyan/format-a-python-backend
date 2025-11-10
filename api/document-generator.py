@@ -9,7 +9,7 @@ parent_dir = os.path.join(current_dir, '..')
 sys.path.insert(0, parent_dir)
 
 # Import only from the correct ieee_generator_fixed.py
-from ieee_generator_fixed import generate_ieee_html_preview, generate_ieee_master_html, generate_ieee_document
+from ieee_generator_fixed import generate_ieee_document
 
 class handler(BaseHTTPRequestHandler):
     def do_OPTIONS(self):
@@ -47,8 +47,21 @@ class handler(BaseHTTPRequestHandler):
                 self.handle_docx_download(document_data)
                 return
             
-            # Default: Generate HTML preview using master HTML for consistency
-            preview_html = generate_ieee_master_html(document_data)
+            # Default: Generate HTML preview using unified rendering system
+            from ieee_generator_fixed import build_document_model, render_to_html
+            
+            print("🌐 Generating HTML preview using unified rendering system...", file=sys.stderr)
+            model = build_document_model(document_data)
+            preview_html = render_to_html(model)
+            
+            # Add preview note for live preview
+            preview_note = '''
+    <div style="background: #e8f4fd; border: 1px solid #bee5eb; padding: 12px; margin: 20px 0; font-size: 9pt; color: #0c5460; text-align: center; border-radius: 4px;">
+        📄 IEEE Live Preview - This is exactly what your PDF will look like
+    </div>
+    '''
+            preview_html = preview_html.replace('<body>', f'<body>{preview_note}', 1)
+            print("✅ HTML preview generated with pixel-perfect formatting", file=sys.stderr)
             
             # Send success response
             self.send_response(200)

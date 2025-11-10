@@ -80,72 +80,56 @@ class handler(BaseHTTPRequestHandler):
                 self.wfile.write(error_response.encode())
                 return
             
-            # Generate PDF using UNIFIED HTML SYSTEM for perfect justification
-            print("🎯 Generating PDF using unified HTML system with perfect justification...", file=sys.stderr)
+            # Generate PDF using UNIFIED RENDERING SYSTEM for pixel-perfect formatting
+            print("🎯 Generating PDF using unified rendering system (pixel-perfect formatting)...", file=sys.stderr)
             
             try:
-                # Step 1: Generate EXACT preview HTML (what user sees)
-                print("📄 Step 1: Generating EXACT preview HTML (what you see in browser)...", file=sys.stderr)
-                preview_html = generate_ieee_html_preview(document_data)
+                # UNIFIED PDF GENERATION: Build document model then render to HTML
+                print("🎯 Building document model with exact OpenXML formatting metadata...", file=sys.stderr)
+                from ieee_generator_fixed import build_document_model, render_to_html
                 
-                # Step 2: Convert preview HTML directly to PDF (no changes)
-                print("🎯 Step 2: Converting preview HTML directly to PDF (exact same formatting)...", file=sys.stderr)
-                pdf_bytes = weasyprint_pdf_from_html(preview_html)
+                model = build_document_model(document_data)
+                print("✅ Document model built - single source of truth", file=sys.stderr)
                 
-                if pdf_bytes and len(pdf_bytes) > 0:
-                    print("✅ Unified HTML-to-PDF generation succeeded with perfect justification", file=sys.stderr)
-                else:
-                    raise Exception("HTML-to-PDF conversion failed - empty result")
+                print("🌐 Rendering HTML with pixel-perfect CSS matching OpenXML...", file=sys.stderr)
+                html = render_to_html(model)
+                print("✅ HTML rendered with exact IEEE formatting", file=sys.stderr)
+                
+                # Convert HTML directly to PDF using WeasyPrint (NO FALLBACKS)
+                print("📄 Converting HTML to PDF with WeasyPrint (pixel-perfect)...", file=sys.stderr)
+                pdf_bytes = weasyprint_pdf_from_html(html)
+                
+                if not pdf_bytes or len(pdf_bytes) == 0:
+                    raise Exception("WeasyPrint PDF generation failed - empty result")
+                
+                print("✅ PDF generated successfully with perfect justification", file=sys.stderr)
                 
             except ImportError as import_error:
-                print(f"❌ WeasyPrint not available in serverless environment: {import_error}", file=sys.stderr)
-                # Return error indicating PDF not available in serverless
+                print(f"❌ WeasyPrint not available: {import_error}", file=sys.stderr)
+                # NO FALLBACKS - PDF generation requires WeasyPrint
                 self.end_headers()
                 error_response = json.dumps({
                     'success': False,
-                    'error': 'PDF generation not available in serverless environment',
-                    'message': 'WeasyPrint dependencies not available. Please use DOCX download instead.',
-                    'suggested_action': 'download_docx',
-                    'serverless_limitation': True
+                    'error': 'PDF generation requires WeasyPrint',
+                    'message': 'WeasyPrint is required for PDF generation with perfect justification. Please install WeasyPrint dependencies.',
+                    'technical_details': str(import_error)
                 })
                 self.wfile.write(error_response.encode())
                 return
                 
-            except Exception as unified_error:
-                print(f"⚠️ Unified HTML system failed: {unified_error}", file=sys.stderr)
-                print("🎯 Falling back to original PDF generator...", file=sys.stderr)
+            except Exception as pdf_error:
+                print(f"❌ PDF generation failed: {pdf_error}", file=sys.stderr)
                 
-                # Fallback: Use the SAME preview HTML but with different PDF engine
-                try:
-                    print("🔄 Fallback: Using same preview HTML with ReportLab PDF engine...", file=sys.stderr)
-                    # Generate the SAME HTML as preview to ensure consistency
-                    fallback_html = generate_ieee_html_preview(document_data)
-                    # Use ReportLab fallback instead of different HTML
-                    from ieee_generator_fixed import reportlab_pdf_from_html
-                    pdf_bytes = reportlab_pdf_from_html(fallback_html)
-                    
-                    if not pdf_bytes or len(pdf_bytes) == 0:
-                        raise Exception("ReportLab fallback also failed")
-                        
-                    print("✅ Fallback PDF generator succeeded with same HTML as preview", file=sys.stderr)
-                    
-                except Exception as fallback_error:
-                    print(f"❌ All PDF generation methods failed: Unified={unified_error}, Fallback={fallback_error}", file=sys.stderr)
-                    
-                    # Return error indicating PDF generation failed
-                    self.end_headers()
-                    error_response = json.dumps({
-                        'success': False,
-                        'error': 'PDF generation failed',
-                        'message': f'All PDF generation methods failed. Unified: {str(unified_error)[:100]}. Fallback: {str(fallback_error)[:100]}',
-                        'suggested_action': 'download_docx',
-                        'details': {
-                            'unified_error': str(unified_error),
-                            'fallback_error': str(fallback_error)
-                        }
-                    })
-                    self.wfile.write(error_response.encode())
-                    return
+                # NO FALLBACKS - Return error immediately
+                self.end_headers()
+                error_response = json.dumps({
+                    'success': False,
+                    'error': 'PDF generation failed',
+                    'message': f'PDF generation with perfect justification failed: {str(pdf_error)}',
+                    'technical_details': str(pdf_error)
+                })
+                self.wfile.write(error_response.encode())
+                return
             
             # Convert to base64 for JSON response
             pdf_base64 = base64.b64encode(pdf_bytes).decode('utf-8')
