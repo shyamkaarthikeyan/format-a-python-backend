@@ -95,7 +95,21 @@ class handler(BaseHTTPRequestHandler):
                 if pdf_bytes and len(pdf_bytes) > 0:
                     print("✅ Unified HTML-to-PDF generation succeeded with perfect justification", file=sys.stderr)
                 else:
-                    raise Exception("HTML-to-PDF conversion failed")
+                    raise Exception("HTML-to-PDF conversion failed - empty result")
+                
+            except ImportError as import_error:
+                print(f"❌ WeasyPrint not available in serverless environment: {import_error}", file=sys.stderr)
+                # Return error indicating PDF not available in serverless
+                self.end_headers()
+                error_response = json.dumps({
+                    'success': False,
+                    'error': 'PDF generation not available in serverless environment',
+                    'message': 'WeasyPrint dependencies not available. Please use DOCX download instead.',
+                    'suggested_action': 'download_docx',
+                    'serverless_limitation': True
+                })
+                self.wfile.write(error_response.encode())
+                return
                 
             except Exception as unified_error:
                 print(f"⚠️ Unified HTML system failed: {unified_error}", file=sys.stderr)
@@ -112,7 +126,21 @@ class handler(BaseHTTPRequestHandler):
                     
                 except Exception as fallback_error:
                     print(f"❌ All PDF generation methods failed: Unified={unified_error}, Fallback={fallback_error}", file=sys.stderr)
-                    raise Exception(f"PDF generation completely failed: {fallback_error}")
+                    
+                    # Return error indicating PDF generation failed
+                    self.end_headers()
+                    error_response = json.dumps({
+                        'success': False,
+                        'error': 'PDF generation failed',
+                        'message': f'All PDF generation methods failed. Unified: {str(unified_error)[:100]}. Fallback: {str(fallback_error)[:100]}',
+                        'suggested_action': 'download_docx',
+                        'details': {
+                            'unified_error': str(unified_error),
+                            'fallback_error': str(fallback_error)
+                        }
+                    })
+                    self.wfile.write(error_response.encode())
+                    return
             
             # Convert to base64 for JSON response
             pdf_base64 = base64.b64encode(pdf_bytes).decode('utf-8')
