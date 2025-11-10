@@ -1805,17 +1805,24 @@ def generate_ieee_html_preview(form_data):
                 margin: 0.75in;
                 background: white;
                 color: black;
+                
+                /* ULTRA-AGGRESSIVE PERFECT JUSTIFICATION - Force LaTeX quality */
                 text-align: justify !important;
+                text-justify: distribute !important;
                 text-align-last: justify !important;
-                text-justify: inter-word !important;
                 hyphens: auto !important;
                 -webkit-hyphens: auto !important;
                 -moz-hyphens: auto !important;
                 -ms-hyphens: auto !important;
-                word-spacing: 0.08em !important;
-                letter-spacing: 0.01em !important;
+                
+                /* ULTRA-AGGRESSIVE character spacing for perfect line endings */
+                letter-spacing: 0.02em !important;
+                word-spacing: 0.12em !important;
+                
+                /* Typography controls */
                 text-rendering: optimizeLegibility !important;
                 font-variant-ligatures: common-ligatures !important;
+                font-feature-settings: "liga" 1, "kern" 1 !important;
             }}
             .ieee-title {{
                 font-size: 24pt;
@@ -1833,13 +1840,13 @@ def generate_ieee_html_preview(form_data):
                 margin: 15px 0;
                 text-align: justify !important;
                 text-align-last: justify !important;
-                text-justify: inter-word !important;
+                text-justify: distribute !important;
                 hyphens: auto !important;
                 -webkit-hyphens: auto !important;
                 -moz-hyphens: auto !important;
                 -ms-hyphens: auto !important;
-                word-spacing: 0.08em !important;
-                letter-spacing: 0.01em !important;
+                word-spacing: 0.12em !important;
+                letter-spacing: 0.02em !important;
             }}
             .ieee-abstract-title {{
                 font-weight: bold;
@@ -1860,6 +1867,12 @@ def generate_ieee_html_preview(form_data):
                 padding-left: 15px;
                 text-indent: -15px;
                 font-size: 9pt;
+                text-align: justify !important;
+                text-align-last: justify !important;
+                text-justify: distribute !important;
+                hyphens: auto !important;
+                word-spacing: 0.12em !important;
+                letter-spacing: 0.02em !important;
             }}
             .preview-note {{
                 background: #e8f4fd;
@@ -1875,19 +1888,37 @@ def generate_ieee_html_preview(form_data):
                 margin: 10px 0;
                 text-align: justify !important;
                 text-align-last: justify !important;
-                text-justify: inter-word !important;
+                text-justify: distribute !important;
                 hyphens: auto !important;
                 -webkit-hyphens: auto !important;
                 -moz-hyphens: auto !important;
                 -ms-hyphens: auto !important;
-                word-spacing: 0.08em !important;
-                letter-spacing: 0.01em !important;
+                word-spacing: 0.12em !important;
+                letter-spacing: 0.02em !important;
             }}
             .figure-caption {{
                 font-size: 9pt;
                 text-align: center;
                 margin: 10px 0;
                 font-style: italic;
+            }}
+            
+            /* UNIVERSAL JUSTIFICATION - Apply to ALL text elements */
+            p, div, span, .ieee-section, .content-block, .ieee-reference {{
+                text-align: justify !important;
+                text-align-last: justify !important;
+                text-justify: distribute !important;
+                hyphens: auto !important;
+                -webkit-hyphens: auto !important;
+                -moz-hyphens: auto !important;
+                -ms-hyphens: auto !important;
+                word-spacing: 0.12em !important;
+                letter-spacing: 0.02em !important;
+            }}
+            
+            /* Keep specific elements centered */
+            .ieee-title, .ieee-authors, .ieee-heading, .figure-caption, .preview-note {{
+                text-align: center !important;
             }}
         </style>
     </head>

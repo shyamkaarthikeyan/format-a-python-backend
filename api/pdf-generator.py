@@ -17,7 +17,7 @@ sys.path.insert(0, parent_dir)
 
 # Import the IEEE generator - this MUST work for proper formatting
 try:
-    from ieee_generator_fixed import generate_ieee_master_html, weasyprint_pdf_from_html, generate_ieee_pdf_perfect_justification
+    from ieee_generator_fixed import generate_ieee_master_html, generate_ieee_html_preview, weasyprint_pdf_from_html, generate_ieee_pdf_perfect_justification
     print("Successfully imported unified IEEE PDF generator with perfect justification", file=sys.stderr)
 except ImportError as e:
     print(f"CRITICAL: Failed to import IEEE PDF generator: {e}", file=sys.stderr)
@@ -84,13 +84,13 @@ class handler(BaseHTTPRequestHandler):
             print("🎯 Generating PDF using unified HTML system with perfect justification...", file=sys.stderr)
             
             try:
-                # Step 1: Generate master HTML template
-                print("📄 Step 1: Generating master HTML template...", file=sys.stderr)
-                master_html = generate_ieee_master_html(document_data)
+                # Step 1: Generate EXACT preview HTML (what user sees)
+                print("📄 Step 1: Generating EXACT preview HTML (what you see in browser)...", file=sys.stderr)
+                preview_html = generate_ieee_html_preview(document_data)
                 
-                # Step 2: Convert HTML to PDF using WeasyPrint
-                print("🎯 Step 2: Converting HTML to PDF with perfect justification...", file=sys.stderr)
-                pdf_bytes = weasyprint_pdf_from_html(master_html)
+                # Step 2: Convert preview HTML directly to PDF (no changes)
+                print("🎯 Step 2: Converting preview HTML directly to PDF (exact same formatting)...", file=sys.stderr)
+                pdf_bytes = weasyprint_pdf_from_html(preview_html)
                 
                 if pdf_bytes and len(pdf_bytes) > 0:
                     print("✅ Unified HTML-to-PDF generation succeeded with perfect justification", file=sys.stderr)
