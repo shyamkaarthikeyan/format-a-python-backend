@@ -933,6 +933,9 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
         elif block.get("type") == "table":
             # FIXED: Handle table blocks from frontend with GUARANTEED captions
             table_count += 1
+            
+            print(f"Processing table block in section {section_idx}, table {table_count}", file=sys.stderr)
+            print(f"Table block data: {block}", file=sys.stderr)
 
             # FIXED: Handle table caption to prevent duplication
             caption_text = block.get("caption", "").strip()
@@ -955,6 +958,8 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
             else:
                 final_caption = f"Data Table {table_count}"
 
+            print(f"Final table caption: {final_caption}", file=sys.stderr)
+
             # Add table caption ONCE
             caption = doc.add_paragraph(
                 f"TABLE {section_idx}.{table_count}: {sanitize_text(final_caption).upper()}"
@@ -968,10 +973,12 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
                 caption.runs[0].bold = True
                 caption.runs[0].italic = False
 
+            print(f"About to call add_ieee_table with block data", file=sys.stderr)
             # Add the table (without caption since we added it above)
             # Mark that caption was already added to prevent duplication
             block["_caption_added"] = True
             add_ieee_table(doc, block, section_idx, table_count)
+            print(f"Completed processing table {table_count} in section {section_idx}", file=sys.stderr)
 
             # Check if this text block also has an image attached (React frontend pattern)
             if block.get("data") and block.get("caption"):
@@ -1012,35 +1019,21 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
                     # Create image stream
                     image_stream = BytesIO(image_bytes)
 
-                    # Add spacing paragraph BEFORE image to create buffer
-                    pre_spacing_para = doc.add_paragraph()
-                    pre_spacing_para.paragraph_format.space_after = Pt(
-                        24
-                    )  # Large buffer before image
-                    pre_spacing_para.paragraph_format.space_before = Pt(12)
-
-                    # Apply OpenXML spacing for precise control
-                    pre_pPr = pre_spacing_para._element.get_or_add_pPr()
-                    pre_spacing_elem = OxmlElement("w:spacing")
-                    pre_spacing_elem.set(qn("w:after"), "480")  # 24pt after (480 twips)
-                    pre_spacing_elem.set(
-                        qn("w:before"), "240"
-                    )  # 12pt before (240 twips)
-                    pre_pPr.append(pre_spacing_elem)
-
-                    # Add spacing before image to separate from text
-                    spacing_before = doc.add_paragraph()
-                    spacing_before.paragraph_format.space_after = Pt(18)
+                    # Create a new section for the image to completely separate it from text
+                    image_section = doc.add_section(WD_SECTION.CONTINUOUS)
                     
-                    # Create a dedicated paragraph for the image
+                    # Add large spacing before image
+                    spacing_para = doc.add_paragraph()
+                    spacing_para.paragraph_format.space_after = Pt(24)
+                    
+                    # Create image paragraph with center alignment
                     para = doc.add_paragraph()
                     para.alignment = WD_ALIGN_PARAGRAPH.CENTER
                     
-                    # Set paragraph spacing to ensure image is separated from text
-                    para.paragraph_format.space_before = Pt(12)
-                    para.paragraph_format.space_after = Pt(12)
+                    # Set paragraph properties to ensure block display
+                    para.paragraph_format.space_before = Pt(18)
+                    para.paragraph_format.space_after = Pt(18)
                     para.paragraph_format.keep_together = True
-                    para.paragraph_format.keep_with_next = True
 
                     # Add the image
                     run = para.add_run()
@@ -1060,16 +1053,19 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
                                 height=IEEE_CONFIG["max_figure_height"],
                             )
                         
-                        print(f"Added image with width: {width}, height: {picture.height}", file=sys.stderr)
+                        print(f"Added image in separate section with width: {width}, height: {picture.height}", file=sys.stderr)
                         
                     except Exception as img_error:
                         print(f"Error adding image: {img_error}", file=sys.stderr)
                         # Fallback: add text placeholder
                         run.add_text(f"[Image: {block.get('caption', 'Figure')}]")
                     
-                    # Add spacing after image before caption
-                    spacing_after = doc.add_paragraph()
-                    spacing_after.paragraph_format.space_after = Pt(6)
+                    # Add spacing after image
+                    post_spacing = doc.add_paragraph()
+                    post_spacing.paragraph_format.space_before = Pt(12)
+                    
+                    # Return to normal section for subsequent content
+                    normal_section = doc.add_section(WD_SECTION.CONTINUOUS)
 
                     # Generate figure number based on section and image position (count only images)
                     img_count = sum(
