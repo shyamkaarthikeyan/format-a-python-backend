@@ -115,14 +115,19 @@ class handler(BaseHTTPRequestHandler):
                 print(f"⚠️ Unified HTML system failed: {unified_error}", file=sys.stderr)
                 print("🎯 Falling back to original PDF generator...", file=sys.stderr)
                 
-                # Fallback to original PDF generator
+                # Fallback: Use the SAME preview HTML but with different PDF engine
                 try:
-                    pdf_bytes = generate_ieee_pdf_perfect_justification(document_data)
+                    print("🔄 Fallback: Using same preview HTML with ReportLab PDF engine...", file=sys.stderr)
+                    # Generate the SAME HTML as preview to ensure consistency
+                    fallback_html = generate_ieee_html_preview(document_data)
+                    # Use ReportLab fallback instead of different HTML
+                    from ieee_generator_fixed import reportlab_pdf_from_html
+                    pdf_bytes = reportlab_pdf_from_html(fallback_html)
                     
                     if not pdf_bytes or len(pdf_bytes) == 0:
-                        raise Exception("Original PDF generator also failed")
+                        raise Exception("ReportLab fallback also failed")
                         
-                    print("✅ Fallback PDF generator succeeded", file=sys.stderr)
+                    print("✅ Fallback PDF generator succeeded with same HTML as preview", file=sys.stderr)
                     
                 except Exception as fallback_error:
                     print(f"❌ All PDF generation methods failed: Unified={unified_error}, Fallback={fallback_error}", file=sys.stderr)

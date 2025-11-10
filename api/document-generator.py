@@ -9,7 +9,7 @@ parent_dir = os.path.join(current_dir, '..')
 sys.path.insert(0, parent_dir)
 
 # Import only from the correct ieee_generator_fixed.py
-from ieee_generator_fixed import generate_ieee_html_preview, generate_ieee_document
+from ieee_generator_fixed import generate_ieee_html_preview, generate_ieee_master_html, generate_ieee_document
 
 class handler(BaseHTTPRequestHandler):
     def do_OPTIONS(self):
@@ -47,8 +47,8 @@ class handler(BaseHTTPRequestHandler):
                 self.handle_docx_download(document_data)
                 return
             
-            # Default: Generate HTML preview using ieee_generator_fixed.py
-            preview_html = generate_ieee_html_preview(document_data)
+            # Default: Generate HTML preview using master HTML for consistency
+            preview_html = generate_ieee_master_html(document_data)
             
             # Send success response
             self.send_response(200)
