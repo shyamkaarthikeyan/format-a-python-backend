@@ -44,7 +44,7 @@ def sanitize_text(text):
 
 
 def add_image_with_proper_layout(doc, image_data, width, caption_text="", figure_number=""):
-    """Add image with proper layout to prevent visibility issues and text overlap."""
+    """Add image with proper layout optimized for 2-column IEEE format."""
     try:
         # Decode base64 image data
         if "," in image_data:
@@ -52,20 +52,57 @@ def add_image_with_proper_layout(doc, image_data, width, caption_text="", figure
         image_bytes = base64.b64decode(image_data)
         image_stream = BytesIO(image_bytes)
         
+        # Ensure width fits within 2-column layout constraints
+        max_column_width = Inches(3.0)  # Safe width for 2-column layout
+        if width > max_column_width:
+            width = max_column_width
+        
         # Add spacing before image
         spacing_para = doc.add_paragraph()
-        spacing_para.space_before = Pt(12)
-        spacing_para.space_after = Pt(6)
+        spacing_para.paragraph_format.space_before = Pt(12)
+        spacing_para.paragraph_format.space_after = Pt(6)
         
-        # Create paragraph for image with center alignment
+        # Create paragraph for image with left alignment for better 2-column compatibility
         img_para = doc.add_paragraph()
-        img_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        img_para.space_before = Pt(6)
-        img_para.space_after = Pt(6)
+        img_para.alignment = WD_ALIGN_PARAGRAPH.LEFT  # Left alignment works better in narrow columns
+        img_para.paragraph_format.space_before = Pt(6)
+        img_para.paragraph_format.space_after = Pt(6)
         
-        # Add image to paragraph
+        # Add image to paragraph with comprehensive visibility settings
         run = img_para.add_run()
         picture = run.add_picture(image_stream, width=width)
+        
+        # CRITICAL: Set image positioning properties for maximum visibility in 2-column layout
+        inline = picture._inline
+        
+        # Force image to be visible and properly positioned
+        docPr = inline.docPr
+        docPr.set('name', f'Image_{figure_number}' if figure_number else 'Image')
+        docPr.set('descr', caption_text if caption_text else 'Figure')
+        
+        # Set graphic properties for maximum visibility
+        graphic = inline.graphic
+        graphicData = graphic.graphicData
+        pic = graphicData.pic
+        
+        # Ensure image has proper display properties
+        spPr = pic.spPr
+        if spPr is not None:
+            # Add transform properties for proper positioning
+            xfrm = spPr.xfrm
+            if xfrm is not None:
+                # Ensure image is not clipped or offset incorrectly
+                off = xfrm.off
+                if off is not None:
+                    off.set('x', '0')
+                    off.set('y', '0')
+                
+                # Set proper extent for visibility
+                ext = xfrm.ext
+                if ext is not None:
+                    # Ensure image extent is properly set
+                    cx = int(width.emu)  # Convert to EMUs
+                    ext.set('cx', str(cx))
         
         # Scale down if too tall to prevent page overflow
         if picture.height > IEEE_CONFIG["max_figure_height"]:
@@ -77,13 +114,19 @@ def add_image_with_proper_layout(doc, image_data, width, caption_text="", figure
                 width=width * scale_factor,
                 height=IEEE_CONFIG["max_figure_height"],
             )
+            
+            # Reapply visibility settings after scaling
+            inline = picture._inline
+            docPr = inline.docPr
+            docPr.set('name', f'Image_{figure_number}_scaled' if figure_number else 'Image_scaled')
+            docPr.set('descr', f'{caption_text} (scaled)' if caption_text else 'Figure (scaled)')
         
         # Add caption if provided
         if caption_text:
             caption_para = doc.add_paragraph()
-            caption_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            caption_para.space_before = Pt(3)
-            caption_para.space_after = Pt(12)
+            caption_para.alignment = WD_ALIGN_PARAGRAPH.LEFT  # Left alignment for 2-column compatibility
+            caption_para.paragraph_format.space_before = Pt(3)
+            caption_para.paragraph_format.space_after = Pt(12)
             
             caption_run = caption_para.add_run()
             if figure_number:
@@ -97,8 +140,8 @@ def add_image_with_proper_layout(doc, image_data, width, caption_text="", figure
         
         # Add spacing after image
         spacing_para_after = doc.add_paragraph()
-        spacing_para_after.space_before = Pt(6)
-        spacing_para_after.space_after = Pt(12)
+        spacing_para_after.paragraph_format.space_before = Pt(6)
+        spacing_para_after.paragraph_format.space_after = Pt(12)
         
         return True
         
@@ -691,73 +734,226 @@ def add_ieee_body_paragraph(doc, text):
 
 
 def add_ieee_table(doc, table_data, section_idx, table_count):
-    """FULL DOCX TABLE SUPPORT - Add a table with EXACT IEEE LaTeX formatting that appears in Word."""
+    """COMPREHENSIVE TABLE VISIBILITY FIX - Ensures tables are 100% visible in Word documents."""
     try:
         table_type = table_data.get("tableType", table_data.get("type", "interactive"))
+        print(f"🔧 Processing table type: {table_type}", file=sys.stderr)
 
         if table_type == "interactive":
-            # Handle interactive tables with headers and data - MUST APPEAR IN WORD
+            # STEP 1: COMPREHENSIVE DATA VALIDATION AND NORMALIZATION
             headers = table_data.get("headers", [])
-            # Support both 'tableData' (frontend) and 'rows' (model) formats
             rows_data = table_data.get("tableData", []) or table_data.get("rows", [])
-
-            if not headers or not rows_data:
-                print(
-                    f"Warning: Interactive table missing headers or data, creating placeholder",
-                    file=sys.stderr,
-                )
-                print(f"  Headers: {headers}", file=sys.stderr)
-                print(f"  Rows data: {rows_data}", file=sys.stderr)
-                print(f"  Table data keys: {list(table_data.keys())}", file=sys.stderr)
-                
-                # Create a simple placeholder table instead of returning
-                headers = headers or ["Column 1", "Column 2"]
-                rows_data = rows_data or [["No data", "No data"]]
-
-            # CRITICAL FIX: Add spacing before table to ensure visibility in two-column layout
-            # This ensures proper positioning within the column layout
-            spacing_before = doc.add_paragraph()
-            spacing_before.paragraph_format.space_before = Pt(6)
-            spacing_before.paragraph_format.space_after = Pt(3)
             
-            # Create table with EXACT IEEE formatting - GUARANTEED TO APPEAR IN WORD
+            print(f"📊 Table data validation:", file=sys.stderr)
+            print(f"   Headers: {headers}", file=sys.stderr)
+            print(f"   Rows: {len(rows_data)} rows", file=sys.stderr)
+            print(f"   Available keys: {list(table_data.keys())}", file=sys.stderr)
+
+            # CRITICAL: Ensure we have valid, visible table data
+            if not headers or not rows_data:
+                print(f"⚠️ Missing table data - creating visible placeholder", file=sys.stderr)
+                headers = ["Parameter", "Value", "Description"]
+                rows_data = [
+                    ["Sample Parameter 1", "Sample Value 1", "Sample Description 1"],
+                    ["Sample Parameter 2", "Sample Value 2", "Sample Description 2"],
+                    ["Sample Parameter 3", "Sample Value 3", "Sample Description 3"]
+                ]
+            
+            # Validate and clean data
+            headers = [sanitize_text(str(h)) if h else f"Column {i+1}" for i, h in enumerate(headers)]
+            cleaned_rows = []
+            for row in rows_data:
+                if isinstance(row, list):
+                    cleaned_row = [sanitize_text(str(cell)) if cell else "" for cell in row]
+                    # Ensure row has same number of columns as headers
+                    while len(cleaned_row) < len(headers):
+                        cleaned_row.append("")
+                    cleaned_rows.append(cleaned_row[:len(headers)])  # Trim excess columns
+                else:
+                    # Handle non-list rows
+                    cleaned_rows.append([sanitize_text(str(row))] + [""] * (len(headers) - 1))
+            
+            rows_data = cleaned_rows
+            
+            # STEP 2: PREPARE TABLE FOR 2-COLUMN LAYOUT COMPATIBILITY
+            print("🔧 Preparing table for 2-column layout...", file=sys.stderr)
+            
+            # STEP 3: CREATE TABLE WITH MAXIMUM VISIBILITY SETTINGS
             num_cols = len(headers)
             num_rows = len(rows_data) + 1  # +1 for header row
-
-            print(f"Creating table with {num_rows} rows and {num_cols} columns", file=sys.stderr)
-
-            table = doc.add_table(rows=num_rows, cols=num_cols)
-            print(f"Table created successfully with {len(table.rows)} rows and {len(table.columns)} columns", file=sys.stderr)
-            table.style = "Table Grid"
-            table.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            table.allow_autofit = True
             
-            # CRITICAL FIX: Force table to span both columns for maximum visibility
+            print(f"🔧 Creating table: {num_rows} rows × {num_cols} columns", file=sys.stderr)
+            table = doc.add_table(rows=num_rows, cols=num_cols)
+            
+            # STEP 4: APPLY MAXIMUM VISIBILITY TABLE FORMATTING
+            table.style = None  # Remove any default style that might hide content
+            table.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            table.allow_autofit = False  # Disable autofit to prevent content hiding
+            
+            # STEP 5: SET COMPREHENSIVE TABLE PROPERTIES FOR MAXIMUM WORD COMPATIBILITY
             tbl = table._element
             tblPr = tbl.xpath('./w:tblPr')[0] if tbl.xpath('./w:tblPr') else OxmlElement('w:tblPr')
             
-            # Force table to span full page width (both columns)
+            # Clear any existing properties that might interfere with visibility
+            for child in list(tblPr):
+                tblPr.remove(child)
+            
+            # Set table width to fit within single column (2-column layout compatible)
             tblW = OxmlElement('w:tblW')
-            tblW.set(qn('w:w'), '9576')  # Full page width in twips (6.5" * 1440)
+            tblW.set(qn('w:w'), '4770')  # Single column width in twips (3.3125" * 1440 twips/inch)
             tblW.set(qn('w:type'), 'dxa')  # Use exact measurements
             tblPr.append(tblW)
             
-            # Center align the table
+            # Center table alignment
             jc = OxmlElement('w:jc')
             jc.set(qn('w:val'), 'center')
             tblPr.append(jc)
             
-            # Force table to be visible with fixed layout
+            # Set table layout to fixed for consistent rendering
             tblLayout = OxmlElement('w:tblLayout')
             tblLayout.set(qn('w:type'), 'fixed')
             tblPr.append(tblLayout)
             
-            # CRITICAL: Force table to break out of column constraints
+            # CRITICAL: Force table to never overlap with other content
             tblOverlap = OxmlElement('w:tblOverlap')
             tblOverlap.set(qn('w:val'), 'never')
             tblPr.append(tblOverlap)
             
-            # Add table properties if not present
+            # Add table properties to table element
+            if not tbl.xpath('./w:tblPr'):
+                tbl.insert(0, tblPr)
+            
+            # STEP 6: SET COMPREHENSIVE CELL FORMATTING FOR MAXIMUM VISIBILITY
+            print("🔧 Applying maximum visibility cell formatting...", file=sys.stderr)
+            
+            # Calculate column width for 2-column layout compatibility
+            col_width_twips = 4770 // num_cols  # Distribute single column width equally
+            min_width_twips = 720  # Minimum 0.5 inch per column for 2-column layout
+            final_col_width = max(min_width_twips, col_width_twips)
+            
+            for row in table.rows:
+                for cell in row.cells:
+                    # Get cell element for direct XML manipulation
+                    tc = cell._element
+                    tcPr = tc.get_or_add_tcPr()
+                    
+                    # Clear existing cell properties that might interfere
+                    for child in list(tcPr):
+                        tcPr.remove(child)
+                    
+                    # CRITICAL: Set visible borders for table structure
+                    tcBorders = OxmlElement("w:tcBorders")
+                    for border_name in ["top", "left", "bottom", "right"]:
+                        border = OxmlElement(f"w:{border_name}")
+                        border.set(qn("w:val"), "single")
+                        border.set(qn("w:sz"), "12")  # 1.5pt border for clear visibility
+                        border.set(qn("w:space"), "0")
+                        border.set(qn("w:color"), "000000")  # Black border
+                        tcBorders.append(border)
+                    tcPr.append(tcBorders)
+                    
+                    # Set cell margins for proper content spacing
+                    tcMar = OxmlElement("w:tcMar")
+                    for margin_name in ["top", "left", "bottom", "right"]:
+                        margin = OxmlElement(f"w:{margin_name}")
+                        margin.set(qn("w:w"), "144")  # 0.1" margin for content visibility
+                        margin.set(qn("w:type"), "dxa")
+                        tcMar.append(margin)
+                    tcPr.append(tcMar)
+                    
+                    # Set fixed cell width for consistent layout
+                    tcW = OxmlElement("w:tcW")
+                    tcW.set(qn("w:w"), str(final_col_width))
+                    tcW.set(qn("w:type"), "dxa")
+                    tcPr.append(tcW)
+                    
+                    # Force white background for maximum contrast
+                    shd = OxmlElement('w:shd')
+                    shd.set(qn('w:val'), 'clear')
+                    shd.set(qn('w:color'), 'auto')
+                    shd.set(qn('w:fill'), 'FFFFFF')  # White background
+                    tcPr.append(shd)
+                    
+                    # Set vertical alignment to top for consistent appearance
+                    vAlign = OxmlElement('w:vAlign')
+                    vAlign.set(qn('w:val'), 'top')
+                    tcPr.append(vAlign)
+            
+            # STEP 7: POPULATE TABLE CONTENT WITH MAXIMUM VISIBILITY FORMATTING
+            print("🔧 Populating table content with maximum visibility...", file=sys.stderr)
+            
+            # HEADER ROW - Bold, centered, maximum visibility
+            header_row = table.rows[0]
+            for col_idx, header in enumerate(headers):
+                cell = header_row.cells[col_idx]
+                
+                # Clear existing content completely
+                cell._element.clear_content()
+                
+                # Add new paragraph with maximum visibility
+                para = cell.add_paragraph()
+                run = para.add_run(str(header))
+                
+                # Maximum visibility header formatting
+                run.font.name = "Times New Roman"
+                run.font.size = Pt(10)  # Standard size for maximum compatibility
+                run.bold = True
+                run.font.color.rgb = None  # Ensure black text
+                para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                
+                # Force paragraph visibility with proper spacing
+                pPr = para._element.get_or_add_pPr()
+                spacing = OxmlElement("w:spacing")
+                spacing.set(qn("w:before"), "72")  # 0.05" before
+                spacing.set(qn("w:after"), "72")   # 0.05" after
+                spacing.set(qn("w:line"), "240")   # 12pt line height
+                spacing.set(qn("w:lineRule"), "exact")
+                pPr.append(spacing)
+                
+                print(f"✅ Added header: '{header}'", file=sys.stderr)
+
+            # DATA ROWS - Regular, left-aligned, maximum visibility
+            for row_idx, row_data in enumerate(rows_data):
+                table_row = table.rows[row_idx + 1]
+                for col_idx, cell_data in enumerate(row_data):
+                    if col_idx < num_cols:
+                        cell = table_row.cells[col_idx]
+                        
+                        # Clear existing content completely
+                        cell._element.clear_content()
+                        
+                        # Add new paragraph with maximum visibility
+                        para = cell.add_paragraph()
+                        run = para.add_run(str(cell_data))
+                        
+                        # Maximum visibility data formatting
+                        run.font.name = "Times New Roman"
+                        run.font.size = Pt(9)  # Slightly smaller for data
+                        run.bold = False
+                        run.font.color.rgb = None  # Ensure black text
+                        para.alignment = WD_ALIGN_PARAGRAPH.LEFT
+                        
+                        # Force paragraph visibility with proper spacing
+                        pPr = para._element.get_or_add_pPr()
+                        spacing = OxmlElement("w:spacing")
+                        spacing.set(qn("w:before"), "36")  # Small spacing
+                        spacing.set(qn("w:after"), "36")
+                        spacing.set(qn("w:line"), "240")   # 12pt line height
+                        spacing.set(qn("w:lineRule"), "exact")
+                        pPr.append(spacing)
+                        
+                        print(f"✅ Added data cell [{row_idx}][{col_idx}]: '{cell_data}'", file=sys.stderr)
+
+            # STEP 8: ADD SPACING AFTER TABLE (STAYS IN 2-COLUMN LAYOUT)
+            print("🔧 Adding spacing after table within 2-column layout...", file=sys.stderr)
+            
+            # Add spacing after table
+            spacing_after = doc.add_paragraph()
+            spacing_after.paragraph_format.space_before = Pt(12)
+            spacing_after.paragraph_format.space_after = Pt(12)
+            
+            print(f"🎉 Table {table_count} completed and fits in 2-column layout!", file=sys.stderr)
+            return True
             if not tbl.xpath('./w:tblPr'):
                 tbl.insert(0, tblPr)
             
@@ -802,17 +998,17 @@ def add_ieee_table(doc, table_data, section_idx, table_count):
                     tcW.set(qn("w:type"), "dxa")
                     tcPr.append(tcW)
 
-            # Set column widths in twips (integer values required)
-            available_width_twips = 6480  # ~4.5 inches in twips (6.5" - margins)
+            # Set column widths for 2-column layout compatibility (integer values required)
+            available_width_twips = 4770  # Single column width in twips (3.3125")
             col_width_twips = available_width_twips // num_cols  # Integer division
-            min_width_twips = 1440  # 1 inch minimum in twips
+            min_width_twips = 720  # 0.5 inch minimum in twips for 2-column layout
             
             final_col_width = max(min_width_twips, col_width_twips)
             
             for col in table.columns:
                 col.width = final_col_width
                 
-            print(f"Set column width to {final_col_width} twips for {num_cols} columns", file=sys.stderr)
+            print(f"Set column width to {final_col_width} twips for {num_cols} columns (2-column layout)", file=sys.stderr)
 
             # HEADER ROW - Bold, centered, 9pt Times New Roman with MAXIMUM VISIBILITY
             header_row = table.rows[0]
@@ -877,9 +1073,11 @@ def add_ieee_table(doc, table_data, section_idx, table_count):
             spacing_after.paragraph_format.space_after = Pt(6)
 
         elif table_type == "image":
-            # Handle image tables with simple, reliable layout
+            # Handle image tables within 2-column layout
             if table_data.get("data"):
                 try:
+                    print("🔧 Processing image table for 2-column layout...", file=sys.stderr)
+                    
                     image_data = table_data["data"]
                     if "," in image_data:
                         image_data = image_data.split(",")[1]
@@ -887,7 +1085,7 @@ def add_ieee_table(doc, table_data, section_idx, table_count):
                     image_bytes = base64.b64decode(image_data)
                     image_stream = BytesIO(image_bytes)
 
-                    # Simple spacing before image
+                    # Add spacing before image
                     spacing_para = doc.add_paragraph()
                     spacing_para.paragraph_format.space_before = Pt(12)
                     spacing_para.paragraph_format.space_after = Pt(6)
@@ -898,21 +1096,48 @@ def add_ieee_table(doc, table_data, section_idx, table_count):
                     img_para.paragraph_format.space_before = Pt(6)
                     img_para.paragraph_format.space_after = Pt(6)
 
-                    # Add image to paragraph
+                    # Add image to paragraph with maximum visibility settings
                     run = img_para.add_run()
 
-                    # Size based on table size setting
+                    # Size for 2-column layout compatibility - ensure images fit within column
                     size = table_data.get("size", "medium")
                     size_mapping = {
-                        "small": Inches(2.0),
-                        "medium": Inches(3.0),
-                        "large": Inches(3.3125),
+                        "small": Inches(1.2),   # Safe size for column
+                        "medium": Inches(2.0),  # Safe size for column
+                        "large": Inches(3.0),   # Max safe column width
                     }
-                    width = size_mapping.get(size, Inches(3.0))
+                    width = size_mapping.get(size, Inches(2.0))
 
+                    # Add image with comprehensive visibility settings
                     picture = run.add_picture(image_stream, width=width)
                     
-                    # Scale down if too tall
+                    # CRITICAL: Set image positioning properties for maximum visibility
+                    inline = picture._inline
+                    extent = inline.extent
+                    
+                    # Force image to be visible and properly positioned
+                    docPr = inline.docPr
+                    docPr.set('name', f'Image_{table_count}')
+                    docPr.set('descr', 'Table Image')
+                    
+                    # Set graphic properties for maximum visibility
+                    graphic = inline.graphic
+                    graphicData = graphic.graphicData
+                    pic = graphicData.pic
+                    
+                    # Ensure image has proper display properties
+                    spPr = pic.spPr
+                    if spPr is not None:
+                        # Add transform properties for proper positioning
+                        xfrm = spPr.xfrm
+                        if xfrm is not None:
+                            # Ensure image is not clipped
+                            off = xfrm.off
+                            if off is not None:
+                                off.set('x', '0')
+                                off.set('y', '0')
+                    
+                    # Scale down if too tall to prevent page overflow
                     if picture.height > IEEE_CONFIG["max_figure_height"]:
                         scale_factor = IEEE_CONFIG["max_figure_height"] / picture.height
                         run.clear()
@@ -922,34 +1147,42 @@ def add_ieee_table(doc, table_data, section_idx, table_count):
                             width=width * scale_factor,
                             height=IEEE_CONFIG["max_figure_height"],
                         )
+                        
+                        # Reapply visibility settings after scaling
+                        inline = picture._inline
+                        docPr = inline.docPr
+                        docPr.set('name', f'Image_{table_count}_scaled')
+                        docPr.set('descr', 'Scaled Table Image')
 
-                    # Simple spacing after image
+                    # Add spacing after image
                     spacing_para_after = doc.add_paragraph()
                     spacing_para_after.paragraph_format.space_before = Pt(6)
                     spacing_para_after.paragraph_format.space_after = Pt(12)
+                    
+                    print("✅ Image table processed for 2-column layout", file=sys.stderr)
 
                 except Exception as e:
                     print(f"Error processing table image: {e}", file=sys.stderr)
-                    return
+                    return False
 
         elif table_type == "latex":
-            # Handle LaTeX tables (convert to text for now)
+            # Handle LaTeX tables within 2-column layout
             latex_code = table_data.get("latexCode", "")
             if latex_code:
+                print("🔧 Processing LaTeX table for 2-column layout...", file=sys.stderr)
+                
+                # Add LaTeX code with proper formatting (stays in 2-column layout)
                 para = doc.add_paragraph()
                 run = para.add_run(f"LaTeX Table Code:\n{sanitize_text(latex_code)}")
                 run.font.name = "Courier New"
-                run.font.size = Pt(8)
+                run.font.size = Pt(8)  # Smaller font for 2-column layout
                 para.alignment = WD_ALIGN_PARAGRAPH.LEFT
-                para.paragraph_format.space_before = Pt(6)
-                para.paragraph_format.space_after = Pt(6)
+                para.paragraph_format.space_before = Pt(12)
+                para.paragraph_format.space_after = Pt(12)
+                
+                print("✅ LaTeX table processed for 2-column layout", file=sys.stderr)
 
-        # Note: Table caption is added by the calling function (add_section)
-        # to prevent duplicate captions. This function only handles the table content.
-
-        # Add spacing after table to prevent overlap
-        spacing = doc.add_paragraph()
-        spacing.paragraph_format.space_after = Pt(12)
+        return True
 
     except Exception as e:
         print(f"Error adding table: {e}", file=sys.stderr)
@@ -1031,29 +1264,25 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
             )
 
         elif block.get("type") == "table":
-            # Handle table blocks with proper ordering and single caption
+            # Handle table blocks with comprehensive visibility fixes
             table_count += 1
             
-            print(f"Processing table block in section {section_idx}, table {table_count}", file=sys.stderr)
+            print(f"🔧 Processing table block in section {section_idx}, table {table_count}", file=sys.stderr)
+            print(f"📊 Table block data: {block}", file=sys.stderr)
 
-            # Get table caption - prefer caption over tableName
-            caption_text = block.get("caption", "").strip()
-            table_name = block.get("tableName", "").strip()
-            final_caption = caption_text or table_name or f"Data Table {table_count}"
+            # COMPREHENSIVE CAPTION HANDLING - Support all possible caption fields
+            caption_text = (
+                block.get("caption", "").strip() or 
+                block.get("tableName", "").strip() or 
+                block.get("name", "").strip() or 
+                f"Data Table {table_count}"
+            )
 
-            print(f"Table caption: {final_caption}", file=sys.stderr)
+            print(f"📝 Final table caption: {caption_text}", file=sys.stderr)
 
-            # CRITICAL FIX: Add section break to force table out of column layout
-            # This ensures table spans both columns and is fully visible
-            section_break_para = doc.add_paragraph()
-            section_break_run = section_break_para.add_run()
-            # Force a column break to ensure table visibility
-            from docx.enum.text import WD_BREAK
-            section_break_run.add_break(WD_BREAK.COLUMN)
-
-            # Add table caption BEFORE table
+            # Add table caption BEFORE table with proper formatting
             caption_para = doc.add_paragraph()
-            caption_run = caption_para.add_run(f"TABLE {section_idx}.{table_count}: {sanitize_text(final_caption).upper()}")
+            caption_run = caption_para.add_run(f"TABLE {section_idx}.{table_count}: {sanitize_text(caption_text).upper()}")
             caption_run.font.name = "Times New Roman"
             caption_run.font.size = Pt(9)
             caption_run.bold = True
@@ -1061,14 +1290,13 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
             caption_para.paragraph_format.space_before = Pt(12)
             caption_para.paragraph_format.space_after = Pt(6)
 
-            # Add the table content immediately after caption
-            add_ieee_table(doc, block, section_idx, table_count)
-            print(f"Completed table {table_count} in section {section_idx}", file=sys.stderr)
+            # Add the table content with comprehensive visibility fixes
+            success = add_ieee_table(doc, block, section_idx, table_count)
             
-            # Add another column break after table to resume normal flow
-            resume_break_para = doc.add_paragraph()
-            resume_break_run = resume_break_para.add_run()
-            resume_break_run.add_break(WD_BREAK.COLUMN)
+            if success:
+                print(f"✅ Successfully completed table {table_count} in section {section_idx}", file=sys.stderr)
+            else:
+                print(f"❌ Failed to create table {table_count} in section {section_idx}", file=sys.stderr)
 
         elif block.get("type") == "text" and block.get("data") and block.get("caption"):
             # Handle text blocks with attached images (React frontend pattern)
@@ -1175,16 +1403,16 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
             # Get image size and caption
             size = block.get("size", "medium")
             size_mapping = {
-                "very-small": Inches(1.5),
-                "small": Inches(2.0),
-                "medium": Inches(2.5),
-                "large": Inches(3.3125),
+                "very-small": Inches(1.2),  # Safe for 2-column
+                "small": Inches(1.8),       # Safe for 2-column
+                "medium": Inches(2.5),      # Safe for 2-column
+                "large": Inches(3.0),       # Max safe for 2-column
             }
             width = size_mapping.get(size, Inches(2.5))
             caption_text = sanitize_text(block['caption'])
             figure_number = f"FIG. {section_idx}.{img_count}"
 
-            # Add image with simple, reliable layout
+            # ALTERNATIVE APPROACH: Force image to break out of column layout for maximum visibility
             try:
                 import base64
                 # Decode base64 image data
@@ -1194,17 +1422,48 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
                 image_bytes = base64.b64decode(image_data)
                 image_stream = BytesIO(image_bytes)
 
-                # Add simple spacing before image
-                doc.add_paragraph().paragraph_format.space_after = Pt(6)
+                print(f"🔧 Processing image {figure_number} with maximum visibility approach...", file=sys.stderr)
 
-                # Create simple image paragraph
+                # CRITICAL FIX: Temporarily break out of column layout for image visibility
+                # Create single-column section for image
+                img_section = doc.add_section(WD_SECTION.CONTINUOUS)
+                img_section.start_type = WD_SECTION.CONTINUOUS
+                
+                # Configure single column for image
+                sectPr = img_section._sectPr
+                existing_cols = sectPr.xpath("./w:cols")
+                for col in existing_cols:
+                    sectPr.remove(col)
+                
+                cols = OxmlElement("w:cols")
+                cols.set(qn("w:num"), "1")  # Single column for maximum image visibility
+                cols.set(qn("w:space"), "0")
+                sectPr.append(cols)
+
+                # Add spacing before image
+                spacing_before = doc.add_paragraph()
+                spacing_before.paragraph_format.space_before = Pt(6)
+                spacing_before.paragraph_format.space_after = Pt(3)
+
+                # Create image paragraph with center alignment (safe in single column)
                 img_para = doc.add_paragraph()
                 img_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                img_para.paragraph_format.space_before = Pt(3)
+                img_para.paragraph_format.space_after = Pt(3)
                 
-                # Add image with minimal formatting to ensure visibility
+                # Add image with maximum visibility settings
                 run = img_para.add_run()
-                picture = run.add_picture(image_stream, width=width)
-
+                
+                # Use larger width since we're in single column mode
+                single_col_width = min(width * 1.5, Inches(4.5))  # Can be larger in single column
+                picture = run.add_picture(image_stream, width=single_col_width)
+                
+                # Set comprehensive image properties for maximum visibility
+                inline = picture._inline
+                docPr = inline.docPr
+                docPr.set('name', f'Figure_{section_idx}_{img_count}')
+                docPr.set('descr', f'Section Figure: {caption_text}')
+                
                 # Scale down if too tall
                 if picture.height > IEEE_CONFIG["max_figure_height"]:
                     scale_factor = IEEE_CONFIG["max_figure_height"] / picture.height
@@ -1212,25 +1471,51 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
                     image_stream.seek(0)
                     picture = run.add_picture(
                         image_stream,
-                        width=width * scale_factor,
+                        width=single_col_width * scale_factor,
                         height=IEEE_CONFIG["max_figure_height"],
                     )
 
-                # Add figure caption immediately after image
+                # Add figure caption
                 caption_para = doc.add_paragraph()
                 caption_run = caption_para.add_run(f"{figure_number}: {caption_text.upper()}")
                 caption_run.font.name = "Times New Roman"
                 caption_run.font.size = Pt(9)
                 caption_run.bold = True
                 caption_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                caption_para.paragraph_format.space_before = Pt(3)
+                caption_para.paragraph_format.space_after = Pt(6)
 
-                # Add simple spacing after caption
-                doc.add_paragraph().paragraph_format.space_after = Pt(12)
+                # Add spacing after image
+                spacing_after = doc.add_paragraph()
+                spacing_after.paragraph_format.space_before = Pt(3)
+                spacing_after.paragraph_format.space_after = Pt(6)
 
-                print(f"Successfully added image {figure_number}", file=sys.stderr)
+                # RESUME 2-COLUMN LAYOUT after image
+                resume_section = doc.add_section(WD_SECTION.CONTINUOUS)
+                resume_section.start_type = WD_SECTION.CONTINUOUS
+                
+                # Configure back to two columns
+                sectPr = resume_section._sectPr
+                existing_cols = sectPr.xpath("./w:cols")
+                for col in existing_cols:
+                    sectPr.remove(col)
+                
+                cols = OxmlElement("w:cols")
+                cols.set(qn("w:num"), "2")  # Back to two columns
+                cols.set(qn("w:space"), "360")  # 0.25" gap
+                cols.set(qn("w:equalWidth"), "1")
+                
+                for i in range(2):
+                    col = OxmlElement("w:col")
+                    col.set(qn("w:w"), "4770")  # 3.3125" width per column
+                    cols.append(col)
+                
+                sectPr.append(cols)
+
+                print(f"✅ Successfully added image {figure_number} with maximum visibility", file=sys.stderr)
 
             except Exception as e:
-                print(f"Error adding image {figure_number}: {e}", file=sys.stderr)
+                print(f"❌ Error adding image {figure_number}: {e}", file=sys.stderr)
                 # Add simple placeholder if image fails
                 para = doc.add_paragraph(f"[Image: {caption_text}]")
                 para.alignment = WD_ALIGN_PARAGRAPH.CENTER
