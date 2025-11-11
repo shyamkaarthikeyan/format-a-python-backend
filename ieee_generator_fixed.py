@@ -43,6 +43,70 @@ def sanitize_text(text):
     return text
 
 
+def add_image_with_proper_layout(doc, image_data, width, caption_text="", figure_number=""):
+    """Add image with proper layout to prevent visibility issues and text overlap."""
+    try:
+        # Decode base64 image data
+        if "," in image_data:
+            image_data = image_data.split(",")[1]
+        image_bytes = base64.b64decode(image_data)
+        image_stream = BytesIO(image_bytes)
+        
+        # Add spacing before image
+        spacing_para = doc.add_paragraph()
+        spacing_para.space_before = Pt(12)
+        spacing_para.space_after = Pt(6)
+        
+        # Create paragraph for image with center alignment
+        img_para = doc.add_paragraph()
+        img_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        img_para.space_before = Pt(6)
+        img_para.space_after = Pt(6)
+        
+        # Add image to paragraph
+        run = img_para.add_run()
+        picture = run.add_picture(image_stream, width=width)
+        
+        # Scale down if too tall to prevent page overflow
+        if picture.height > IEEE_CONFIG["max_figure_height"]:
+            scale_factor = IEEE_CONFIG["max_figure_height"] / picture.height
+            run.clear()
+            image_stream.seek(0)  # Reset stream position
+            picture = run.add_picture(
+                image_stream,
+                width=width * scale_factor,
+                height=IEEE_CONFIG["max_figure_height"],
+            )
+        
+        # Add caption if provided
+        if caption_text:
+            caption_para = doc.add_paragraph()
+            caption_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            caption_para.space_before = Pt(3)
+            caption_para.space_after = Pt(12)
+            
+            caption_run = caption_para.add_run()
+            if figure_number:
+                caption_run.text = f"{figure_number}: {caption_text}"
+            else:
+                caption_run.text = caption_text
+            caption_run.font.size = IEEE_CONFIG["font_size_caption"]
+            caption_run.font.name = IEEE_CONFIG["font_name"]
+            caption_run.italic = True
+            caption_run.bold = True
+        
+        # Add spacing after image
+        spacing_para_after = doc.add_paragraph()
+        spacing_para_after.space_before = Pt(6)
+        spacing_para_after.space_after = Pt(12)
+        
+        return True
+        
+    except Exception as e:
+        print(f"Error adding image with proper layout: {e}", file=sys.stderr)
+        return False
+
+
 # IEEE EXACT LATEX PDF FORMATTING - LOW-LEVEL OPENXML SPECIFICATIONS
 IEEE_CONFIG = {
     "font_name": "Times New Roman",
@@ -2214,7 +2278,7 @@ def build_document_model(form_data):
                 "contentBlocks": []
             })
         
-        # Add standalone tables as content blocks
+        # Add standalone tables as content blocks with proper ordering
         for table in standalone_tables:
             table_block = {
                 "type": "table",
@@ -2222,7 +2286,7 @@ def build_document_model(form_data):
                 "tableName": table.get("tableName", ""),
                 "caption": table.get("caption", ""),
                 "size": table.get("size", "medium"),
-                "order": len(sections[0].get("contentBlocks", []))
+                "order": table.get("order", 999)  # Use table's order or default to end
             }
             
             if table_block["tableType"] == "interactive":
@@ -2237,7 +2301,7 @@ def build_document_model(form_data):
             
             sections[0].setdefault("contentBlocks", []).append(table_block)
         
-        # Add standalone figures as content blocks
+        # Add standalone figures as content blocks with proper ordering
         for figure in standalone_figures:
             figure_block = {
                 "type": "image",
@@ -2246,7 +2310,7 @@ def build_document_model(form_data):
                 "size": figure.get("size", "medium"),
                 "originalName": figure.get("originalName", ""),
                 "mimeType": figure.get("mimeType", ""),
-                "order": len(sections[0].get("contentBlocks", []))
+                "order": figure.get("order", 999)  # Use figure's order or default to end
             }
             sections[0].setdefault("contentBlocks", []).append(figure_block)
 
@@ -2267,6 +2331,10 @@ def build_document_model(form_data):
         
         # Process content blocks (including converted standalone tables/figures)
         content_blocks = section.get("contentBlocks", [])
+        
+        # CRITICAL FIX: Sort content blocks by their order field to ensure correct sequence
+        content_blocks = sorted(content_blocks, key=lambda x: x.get("order", 999))
+        
         table_count = 0
         img_count = 0
         
