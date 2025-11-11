@@ -105,6 +105,8 @@ class handler(BaseHTTPRequestHandler):
                 return
             
             # FORCE Word → PDF conversion - NO FALLBACK ALLOWED
+            print("🚨 DIAGNOSTIC: Starting Word → PDF conversion (NO FALLBACK ALLOWED)", file=sys.stderr)
+            print(f"🔍 DIAGNOSTIC: Available functions - generate_ieee_document: {callable(generate_ieee_document)}, convert_docx_to_pdf: {callable(convert_docx_to_pdf)}", file=sys.stderr)
             
             # Generate PDF using ONLY Word → PDF conversion pipeline
             print("🎯 Generating PDF using Word → PDF conversion pipeline (NO FALLBACK)...", file=sys.stderr)
