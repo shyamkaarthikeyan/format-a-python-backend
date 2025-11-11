@@ -1,6 +1,6 @@
 """
 PDF Generator endpoint for Python backend
-Generates IEEE-formatted PDF documents with PERFECT justification using WeasyPrint
+Generates IEEE-formatted PDF documents by converting Word documents to PDF
 """
 
 import json
@@ -15,13 +15,14 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.join(current_dir, '..')
 sys.path.insert(0, parent_dir)
 
-# Import the IEEE generator - this MUST work for proper formatting
+# Import the IEEE Word generator and PDF converter
 try:
-    from ieee_generator_fixed import generate_ieee_master_html, generate_ieee_html_preview, weasyprint_pdf_from_html, generate_ieee_pdf_perfect_justification
-    print("Successfully imported unified IEEE PDF generator with perfect justification", file=sys.stderr)
+    from ieee_generator_fixed import generate_ieee_document
+    from docx_to_pdf_converter import convert_docx_to_pdf
+    print("Successfully imported IEEE Word generator and PDF converter", file=sys.stderr)
 except ImportError as e:
-    print(f"CRITICAL: Failed to import IEEE PDF generator: {e}", file=sys.stderr)
-    raise ImportError(f"IEEE PDF generator is required: {e}")
+    print(f"CRITICAL: Failed to import IEEE generators: {e}", file=sys.stderr)
+    raise ImportError(f"IEEE generators are required: {e}")
 
 class handler(BaseHTTPRequestHandler):
     def do_OPTIONS(self):
@@ -80,53 +81,37 @@ class handler(BaseHTTPRequestHandler):
                 self.wfile.write(error_response.encode())
                 return
             
-            # Generate PDF using UNIFIED RENDERING SYSTEM for pixel-perfect formatting
-            print("🎯 Generating PDF using unified rendering system (pixel-perfect formatting)...", file=sys.stderr)
+            # Generate PDF using Word → PDF conversion pipeline
+            print("🎯 Generating PDF using Word → PDF conversion pipeline...", file=sys.stderr)
             
             try:
-                # UNIFIED PDF GENERATION: Build document model then render to HTML
-                print("🎯 Building document model with exact OpenXML formatting metadata...", file=sys.stderr)
-                from ieee_generator_fixed import build_document_model, render_to_html
+                # Step 1: Generate Word document using existing IEEE generator
+                print("📝 Generating IEEE Word document...", file=sys.stderr)
+                docx_bytes = generate_ieee_document(document_data)
                 
-                model = build_document_model(document_data)
-                print("✅ Document model built - single source of truth", file=sys.stderr)
+                if not docx_bytes or len(docx_bytes) == 0:
+                    raise Exception("Word document generation failed - empty result")
                 
-                print("🌐 Rendering HTML with pixel-perfect CSS matching OpenXML...", file=sys.stderr)
-                html = render_to_html(model)
-                print("✅ HTML rendered with exact IEEE formatting", file=sys.stderr)
+                print(f"✅ Word document generated successfully, size: {len(docx_bytes)} bytes", file=sys.stderr)
                 
-                # Convert HTML directly to PDF using WeasyPrint (NO FALLBACKS)
-                print("📄 Converting HTML to PDF with WeasyPrint (pixel-perfect)...", file=sys.stderr)
-                pdf_bytes = weasyprint_pdf_from_html(html)
+                # Step 2: Convert Word document to PDF
+                print("📄 Converting Word document to PDF...", file=sys.stderr)
+                pdf_bytes = convert_docx_to_pdf(docx_bytes)
                 
                 if not pdf_bytes or len(pdf_bytes) == 0:
-                    raise Exception("WeasyPrint PDF generation failed - empty result")
+                    raise Exception("PDF conversion failed - empty result")
                 
-                print("✅ PDF generated successfully with perfect justification", file=sys.stderr)
+                print("✅ PDF generated successfully from Word document", file=sys.stderr)
                 
-            except ImportError as import_error:
-                print(f"❌ WeasyPrint not available: {import_error}", file=sys.stderr)
-                # NO FALLBACKS - PDF generation requires WeasyPrint
-                self.end_headers()
-                error_response = json.dumps({
-                    'success': False,
-                    'error': 'PDF generation requires WeasyPrint',
-                    'message': 'WeasyPrint is required for PDF generation with perfect justification. Please install WeasyPrint dependencies.',
-                    'technical_details': str(import_error)
-                })
-                self.wfile.write(error_response.encode())
-                return
+            except Exception as generation_error:
+                print(f"❌ PDF generation failed: {generation_error}", file=sys.stderr)
                 
-            except Exception as pdf_error:
-                print(f"❌ PDF generation failed: {pdf_error}", file=sys.stderr)
-                
-                # NO FALLBACKS - Return error immediately
                 self.end_headers()
                 error_response = json.dumps({
                     'success': False,
                     'error': 'PDF generation failed',
-                    'message': f'PDF generation with perfect justification failed: {str(pdf_error)}',
-                    'technical_details': str(pdf_error)
+                    'message': f'PDF generation from Word document failed: {str(generation_error)}',
+                    'technical_details': str(generation_error)
                 })
                 self.wfile.write(error_response.encode())
                 return
@@ -157,10 +142,10 @@ class handler(BaseHTTPRequestHandler):
                         'authors': [author.get('name', '') for author in document_data.get('authors', [])],
                         'sections': len(document_data.get('sections', [])),
                         'references': len(document_data.get('references', [])),
-                        'generated_by': 'python_backend_weasyprint',
+                        'generated_by': 'python_backend_word_to_pdf',
                         'requested_format': 'pdf',
                         'actual_format': 'pdf',
-                        'justification_method': 'weasyprint_perfect'
+                        'conversion_method': 'word_to_pdf_reportlab'
                     }
                 }
                 
@@ -178,8 +163,8 @@ class handler(BaseHTTPRequestHandler):
                 'file_data': pdf_base64,
                 'file_type': 'application/pdf',
                 'file_size': len(pdf_bytes),
-                'message': 'PDF document generated with perfect justification',
-                'justification_method': 'weasyprint_perfect',
+                'message': 'PDF document generated from Word document',
+                'conversion_method': 'word_to_pdf_reportlab',
                 'download_recorded': download_recorded
             })
             self.wfile.write(response.encode())
