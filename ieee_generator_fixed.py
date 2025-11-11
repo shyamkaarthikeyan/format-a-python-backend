@@ -714,6 +714,12 @@ def add_ieee_table(doc, table_data, section_idx, table_count):
                 headers = headers or ["Column 1", "Column 2"]
                 rows_data = rows_data or [["No data", "No data"]]
 
+            # CRITICAL FIX: Add spacing before table to ensure visibility in two-column layout
+            # This ensures proper positioning within the column layout
+            spacing_before = doc.add_paragraph()
+            spacing_before.paragraph_format.space_before = Pt(6)
+            spacing_before.paragraph_format.space_after = Pt(3)
+            
             # Create table with EXACT IEEE formatting - GUARANTEED TO APPEAR IN WORD
             num_cols = len(headers)
             num_rows = len(rows_data) + 1  # +1 for header row
@@ -726,24 +732,70 @@ def add_ieee_table(doc, table_data, section_idx, table_count):
             table.alignment = WD_ALIGN_PARAGRAPH.CENTER
             table.allow_autofit = True
             
-            # Ensure table has visible borders
+            # CRITICAL FIX: Set table properties for maximum visibility in two-column layout
+            tbl = table._element
+            tblPr = tbl.xpath('./w:tblPr')[0] if tbl.xpath('./w:tblPr') else OxmlElement('w:tblPr')
+            
+            # Force table to be visible by setting explicit width and alignment
+            tblW = OxmlElement('w:tblW')
+            tblW.set(qn('w:w'), '4770')  # Column width in twips
+            tblW.set(qn('w:type'), 'dxa')  # Use exact measurements
+            tblPr.append(tblW)
+            
+            # Center align the table
+            jc = OxmlElement('w:jc')
+            jc.set(qn('w:val'), 'center')
+            tblPr.append(jc)
+            
+            # Ensure table layout is fixed for consistent rendering
+            tblLayout = OxmlElement('w:tblLayout')
+            tblLayout.set(qn('w:type'), 'fixed')
+            tblPr.append(tblLayout)
+            
+            # Add table properties if not present
+            if not tbl.xpath('./w:tblPr'):
+                tbl.insert(0, tblPr)
+            
+            # CRITICAL: Ensure table has visible borders and proper cell formatting
             for row in table.rows:
                 for cell in row.cells:
                     # Set cell borders to make table visible
                     tc = cell._element
                     tcPr = tc.get_or_add_tcPr()
+                    
+                    # Remove any existing borders first
+                    existing_borders = tcPr.xpath('./w:tcBorders')
+                    for border in existing_borders:
+                        tcPr.remove(border)
+                    
+                    # Add new visible borders
                     tcBorders = OxmlElement("w:tcBorders")
                     
-                    # Add all borders (top, left, bottom, right)
+                    # Add all borders (top, left, bottom, right) with thick black lines
                     for border_name in ["top", "left", "bottom", "right"]:
                         border = OxmlElement(f"w:{border_name}")
                         border.set(qn("w:val"), "single")
-                        border.set(qn("w:sz"), "12")  # 1.5pt thick border for visibility
+                        border.set(qn("w:sz"), "18")  # 2.25pt thick border for maximum visibility
                         border.set(qn("w:space"), "0")
                         border.set(qn("w:color"), "000000")  # Black border
                         tcBorders.append(border)
                     
                     tcPr.append(tcBorders)
+                    
+                    # CRITICAL: Ensure cell has proper margins and padding for content visibility
+                    tcMar = OxmlElement("w:tcMar")
+                    for margin_name in ["top", "left", "bottom", "right"]:
+                        margin = OxmlElement(f"w:{margin_name}")
+                        margin.set(qn("w:w"), "108")  # 0.075" margin for better content visibility
+                        margin.set(qn("w:type"), "dxa")
+                        tcMar.append(margin)
+                    tcPr.append(tcMar)
+                    
+                    # Force cell to have minimum width for visibility
+                    tcW = OxmlElement("w:tcW")
+                    tcW.set(qn("w:w"), "2160")  # Use fixed width for consistency
+                    tcW.set(qn("w:type"), "dxa")
+                    tcPr.append(tcW)
 
             # Set column widths in twips (integer values required)
             available_width_twips = 6480  # ~4.5 inches in twips (6.5" - margins)
