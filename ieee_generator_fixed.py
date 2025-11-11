@@ -1099,14 +1099,16 @@ def add_ieee_table(doc, table_data, section_idx, table_count):
                     # Add image to paragraph with maximum visibility settings
                     run = img_para.add_run()
 
-                    # Size for 2-column layout compatibility - ensure images fit within column
+                    # Size for 2-column layout compatibility - CONSERVATIVE SIZING TO PREVENT OVERLAP
                     size = table_data.get("size", "medium")
                     size_mapping = {
-                        "small": Inches(1.2),   # Safe size for column
-                        "medium": Inches(2.0),  # Safe size for column
-                        "large": Inches(3.0),   # Max safe column width
+                        "small": Inches(1.0),   # Very conservative for 2-column
+                        "medium": Inches(1.4),  # Conservative for 2-column
+                        "large": Inches(1.8),   # Max conservative for 2-column
                     }
-                    width = size_mapping.get(size, Inches(2.0))
+                    width = size_mapping.get(size, Inches(1.4))
+                    
+                    print(f"📏 Image table size '{size}' mapped to width: {width}", file=sys.stderr)
 
                     # Add image with comprehensive visibility settings
                     picture = run.add_picture(image_stream, width=width)
@@ -1400,15 +1402,17 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
 
             print(f"Processing image block in section {section_idx}, image {img_count}", file=sys.stderr)
 
-            # Get image size and caption
+            # Get image size and caption - CONSERVATIVE SIZING TO PREVENT OVERLAP
             size = block.get("size", "medium")
             size_mapping = {
-                "very-small": Inches(1.2),  # Safe for 2-column
-                "small": Inches(1.8),       # Safe for 2-column
-                "medium": Inches(2.5),      # Safe for 2-column
-                "large": Inches(3.0),       # Max safe for 2-column
+                "very-small": Inches(1.0),  # Very conservative for 2-column
+                "small": Inches(1.4),       # Conservative for 2-column
+                "medium": Inches(1.8),      # Conservative for 2-column
+                "large": Inches(2.2),       # Max conservative for 2-column
             }
-            width = size_mapping.get(size, Inches(2.5))
+            width = size_mapping.get(size, Inches(1.8))
+            
+            print(f"📏 Image size '{size}' mapped to width: {width}", file=sys.stderr)
             caption_text = sanitize_text(block['caption'])
             figure_number = f"FIG. {section_idx}.{img_count}"
 
@@ -1424,22 +1428,36 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
 
                 print(f"🔧 Processing image {figure_number} for 2-column layout compatibility...", file=sys.stderr)
 
-                # Add spacing before image
-                spacing_before = doc.add_paragraph()
-                spacing_before.paragraph_format.space_before = Pt(6)
-                spacing_before.paragraph_format.space_after = Pt(3)
+                # ULTIMATE FIX: Force column break before image to ensure complete separation
+                from docx.enum.text import WD_BREAK
+                
+                # Add paragraph with column break to force image to new position
+                break_para = doc.add_paragraph()
+                break_run = break_para.add_run()
+                break_run.add_break(WD_BREAK.COLUMN)
+                break_para.paragraph_format.space_before = Pt(0)
+                break_para.paragraph_format.space_after = Pt(6)
 
-                # Create image paragraph with proper 2-column formatting
+                # FORCE LINE BREAK BEFORE IMAGE - Prevents inline text issues
+                line_break_before = doc.add_paragraph()
+                line_break_before.paragraph_format.space_before = Pt(6)
+                line_break_before.paragraph_format.space_after = Pt(3)
+                line_break_before.paragraph_format.keep_with_next = False
+                line_break_before.paragraph_format.page_break_before = False
+
+                # Create image paragraph with FORCED isolation from text
                 img_para = doc.add_paragraph()
                 img_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                img_para.paragraph_format.space_before = Pt(3)
-                img_para.paragraph_format.space_after = Pt(3)
+                img_para.paragraph_format.space_before = Pt(6)
+                img_para.paragraph_format.space_after = Pt(6)
+                img_para.paragraph_format.keep_with_next = True  # Keep image with caption
+                img_para.paragraph_format.keep_together = True  # Prevent splitting
                 
                 # Set paragraph properties to prevent clipping in 2-column layout
                 pPr = img_para._element.get_or_add_pPr()
                 
                 # Clear any existing formatting that might interfere
-                for elem in pPr.xpath("./w:spacing | ./w:ind | ./w:jc"):
+                for elem in pPr.xpath("./w:spacing | ./w:ind | ./w:jc | ./w:keepNext | ./w:keepLines"):
                     pPr.remove(elem)
                 
                 # Center alignment for images
@@ -1447,11 +1465,20 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
                 jc.set(qn("w:val"), "center")
                 pPr.append(jc)
                 
-                # Proper spacing for image visibility
+                # CRITICAL: Force paragraph to be on its own line
+                keepNext = OxmlElement("w:keepNext")
+                keepNext.set(qn("w:val"), "1")
+                pPr.append(keepNext)
+                
+                keepLines = OxmlElement("w:keepLines")
+                keepLines.set(qn("w:val"), "1")
+                pPr.append(keepLines)
+                
+                # Proper spacing for image visibility with generous margins
                 spacing = OxmlElement("w:spacing")
-                spacing.set(qn("w:before"), "180")  # 9pt before
-                spacing.set(qn("w:after"), "180")   # 9pt after
-                spacing.set(qn("w:line"), "240")    # 12pt line height
+                spacing.set(qn("w:before"), "240")  # 12pt before (increased)
+                spacing.set(qn("w:after"), "240")   # 12pt after (increased)
+                spacing.set(qn("w:line"), "360")    # 18pt line height (increased)
                 spacing.set(qn("w:lineRule"), "exact")
                 pPr.append(spacing)
                 
@@ -1464,10 +1491,12 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
                 # Add image with proper sizing for 2-column layout
                 run = img_para.add_run()
                 
-                # Ensure image fits comfortably within column width (leave margin for safety)
-                max_col_width = Inches(2.8)  # Slightly smaller than column width for safety
+                # Ensure image fits comfortably within column width with generous margins
+                max_col_width = Inches(2.2)  # Much smaller to prevent overlap issues
                 if width > max_col_width:
                     width = max_col_width
+                
+                print(f"📏 Image width set to: {width} (max allowed: {max_col_width})", file=sys.stderr)
                 
                 picture = run.add_picture(image_stream, width=width)
                 
@@ -1520,10 +1549,24 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
                 caption_para.paragraph_format.space_before = Pt(3)
                 caption_para.paragraph_format.space_after = Pt(12)
 
-                # Add spacing after caption
+                # FORCE COMPLETE SEPARATION - Prevents any inline text issues
                 spacing_after = doc.add_paragraph()
-                spacing_after.paragraph_format.space_before = Pt(3)
-                spacing_after.paragraph_format.space_after = Pt(6)
+                spacing_after.paragraph_format.space_before = Pt(6)
+                spacing_after.paragraph_format.space_after = Pt(24)  # Large spacing to prevent overlap
+                spacing_after.paragraph_format.keep_with_next = False
+                spacing_after.paragraph_format.page_break_before = False
+                
+                # Add mandatory paragraph break to ensure complete separation
+                separator_para = doc.add_paragraph()
+                separator_para.paragraph_format.space_before = Pt(0)
+                separator_para.paragraph_format.space_after = Pt(18)
+                separator_para.paragraph_format.keep_with_next = False
+                
+                # Add final spacing paragraph to guarantee text separation
+                final_spacing = doc.add_paragraph()
+                final_spacing.paragraph_format.space_before = Pt(0)
+                final_spacing.paragraph_format.space_after = Pt(12)
+                final_spacing.paragraph_format.keep_with_next = False
 
                 print(f"✅ Successfully added image {figure_number} optimized for 2-column layout", file=sys.stderr)
 
