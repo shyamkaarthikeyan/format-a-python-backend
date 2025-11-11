@@ -100,84 +100,53 @@ class handler(BaseHTTPRequestHandler):
                 self.wfile.write(error_response.encode())
                 return
             
-            # Try Word → PDF conversion first, fallback to HTML → PDF if needed
-            pdf_bytes = None
-            conversion_method = None
+            # ONLY Word → PDF conversion - NO FALLBACK
+            if not IMPORTS_AVAILABLE:
+                self.end_headers()
+                error_response = json.dumps({
+                    'success': False,
+                    'error': 'Word → PDF conversion not available',
+                    'message': f'Word → PDF conversion modules could not be imported: {IMPORT_ERROR}',
+                    'technical_details': IMPORT_ERROR
+                })
+                self.wfile.write(error_response.encode())
+                return
             
-            if IMPORTS_AVAILABLE:
-                try:
-                    # Generate PDF using Word → PDF conversion pipeline
-                    print("🎯 Attempting Word → PDF conversion pipeline...", file=sys.stderr)
-                    
-                    # Step 1: Generate Word document using existing IEEE generator
-                    print("📝 Generating IEEE Word document...", file=sys.stderr)
-                    docx_bytes = generate_ieee_document(document_data)
-                    
-                    if not docx_bytes or len(docx_bytes) == 0:
-                        raise Exception("Word document generation failed - empty result")
-                    
-                    print(f"✅ Word document generated successfully, size: {len(docx_bytes)} bytes", file=sys.stderr)
-                    
-                    # Step 2: Convert Word document to PDF
-                    print("📄 Converting Word document to PDF...", file=sys.stderr)
-                    pdf_bytes = convert_docx_to_pdf(docx_bytes)
-                    
-                    if not pdf_bytes or len(pdf_bytes) == 0:
-                        raise Exception("PDF conversion failed - empty result")
-                    
-                    print("✅ PDF generated successfully from Word document", file=sys.stderr)
-                    conversion_method = 'word_to_pdf_reportlab'
-                    
-                except Exception as word_error:
-                    print(f"⚠️ Word → PDF conversion failed: {word_error}", file=sys.stderr)
-                    print("🔄 Falling back to HTML → PDF conversion...", file=sys.stderr)
-                    pdf_bytes = None
+            # Generate PDF using ONLY Word → PDF conversion pipeline
+            print("🎯 Generating PDF using Word → PDF conversion pipeline (NO FALLBACK)...", file=sys.stderr)
             
-            # Fallback to HTML → PDF conversion if Word → PDF failed or imports unavailable
-            if pdf_bytes is None:
-                try:
-                    print("🎯 Using HTML → PDF fallback conversion...", file=sys.stderr)
-                    
-                    # Try to import the original HTML → PDF functions
-                    try:
-                        from ieee_generator_fixed import build_document_model, render_to_html, weasyprint_pdf_from_html
-                        
-                        # Build document model
-                        print("🎯 Building document model...", file=sys.stderr)
-                        model = build_document_model(document_data)
-                        
-                        # Render to HTML
-                        print("🌐 Rendering HTML...", file=sys.stderr)
-                        html = render_to_html(model)
-                        
-                        # Convert HTML to PDF
-                        print("📄 Converting HTML to PDF with WeasyPrint...", file=sys.stderr)
-                        pdf_bytes = weasyprint_pdf_from_html(html)
-                        
-                        if not pdf_bytes or len(pdf_bytes) == 0:
-                            raise Exception("HTML → PDF conversion failed - empty result")
-                        
-                        print("✅ PDF generated successfully from HTML", file=sys.stderr)
-                        conversion_method = 'html_to_pdf_weasyprint_fallback'
-                        
-                    except ImportError as import_error:
-                        raise Exception(f"Both Word → PDF and HTML → PDF methods unavailable: {import_error}")
-                        
-                except Exception as fallback_error:
-                    print(f"❌ All PDF generation methods failed: {fallback_error}", file=sys.stderr)
-                    
-                    self.end_headers()
-                    error_response = json.dumps({
-                        'success': False,
-                        'error': 'PDF generation failed',
-                        'message': f'All PDF generation methods failed. Word → PDF: {IMPORT_ERROR if not IMPORTS_AVAILABLE else "Available but failed"}. HTML → PDF: {str(fallback_error)}',
-                        'technical_details': {
-                            'word_to_pdf_error': IMPORT_ERROR if not IMPORTS_AVAILABLE else "Available but failed",
-                            'html_to_pdf_error': str(fallback_error)
-                        }
-                    })
-                    self.wfile.write(error_response.encode())
-                    return
+            try:
+                # Step 1: Generate Word document using existing IEEE generator
+                print("📝 Generating IEEE Word document...", file=sys.stderr)
+                docx_bytes = generate_ieee_document(document_data)
+                
+                if not docx_bytes or len(docx_bytes) == 0:
+                    raise Exception("Word document generation failed - empty result")
+                
+                print(f"✅ Word document generated successfully, size: {len(docx_bytes)} bytes", file=sys.stderr)
+                
+                # Step 2: Convert Word document to PDF
+                print("📄 Converting Word document to PDF...", file=sys.stderr)
+                pdf_bytes = convert_docx_to_pdf(docx_bytes)
+                
+                if not pdf_bytes or len(pdf_bytes) == 0:
+                    raise Exception("PDF conversion failed - empty result")
+                
+                print("✅ PDF generated successfully from Word document", file=sys.stderr)
+                conversion_method = 'word_to_pdf_reportlab'
+                
+            except Exception as generation_error:
+                print(f"❌ Word → PDF conversion failed: {generation_error}", file=sys.stderr)
+                
+                self.end_headers()
+                error_response = json.dumps({
+                    'success': False,
+                    'error': 'Word → PDF conversion failed',
+                    'message': f'Word → PDF conversion failed: {str(generation_error)}',
+                    'technical_details': str(generation_error)
+                })
+                self.wfile.write(error_response.encode())
+                return
             
             # Convert to base64 for JSON response
             pdf_base64 = base64.b64encode(pdf_bytes).decode('utf-8')
@@ -222,11 +191,8 @@ class handler(BaseHTTPRequestHandler):
             
             self.end_headers()
             
-            # Set appropriate message based on conversion method
-            if conversion_method == 'word_to_pdf_reportlab':
-                message = 'PDF document generated from Word document'
-            else:
-                message = 'PDF document generated using fallback HTML conversion'
+            # Message for Word → PDF conversion (only method available)
+            message = 'PDF document generated from Word document'
             
             response = json.dumps({
                 'success': True,
