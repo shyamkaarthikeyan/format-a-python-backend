@@ -10,7 +10,7 @@ import base64
 from io import BytesIO
 from http.server import BaseHTTPRequestHandler
 
-# Import the generate function from the local IEEE generator
+# FORCE WORD → PDF CONVERSION ONLY - NO HTML FALLBACK ALLOWED
 current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.join(current_dir, '..')
 sys.path.insert(0, parent_dir)
@@ -19,29 +19,33 @@ sys.path.insert(0, parent_dir)
 root_dir = os.path.join(parent_dir, '..')
 sys.path.insert(0, root_dir)
 
-# Import the IEEE Word generator and PDF converter
-IMPORTS_AVAILABLE = False
-IMPORT_ERROR = None
-
+# MANDATORY IMPORTS - FAIL IF NOT AVAILABLE
 try:
     # Try multiple import paths for Vercel compatibility
     try:
         from ieee_generator_fixed import generate_ieee_document
         from docx_to_pdf_converter import convert_docx_to_pdf
+        print("✅ WORD → PDF IMPORTS SUCCESSFUL", file=sys.stderr)
     except ImportError:
         # Try with explicit path
         sys.path.insert(0, '/var/task')
         from ieee_generator_fixed import generate_ieee_document
         from docx_to_pdf_converter import convert_docx_to_pdf
+        print("✅ WORD → PDF IMPORTS SUCCESSFUL (Vercel path)", file=sys.stderr)
     
-    IMPORTS_AVAILABLE = True
-    print("Successfully imported IEEE Word generator and PDF converter", file=sys.stderr)
+    print("🎯 WORD → PDF CONVERSION SYSTEM READY", file=sys.stderr)
+    
 except ImportError as e:
-    IMPORT_ERROR = str(e)
-    print(f"WARNING: Failed to import IEEE generators: {e}", file=sys.stderr)
+    print(f"❌ CRITICAL: WORD → PDF IMPORTS FAILED: {e}", file=sys.stderr)
     print(f"Current working directory: {os.getcwd()}", file=sys.stderr)
     print(f"Python path: {sys.path}", file=sys.stderr)
-    print("Will provide fallback response", file=sys.stderr)
+    
+    # FORCE FAILURE - NO HTML FALLBACK ALLOWED
+    def generate_ieee_document(*args, **kwargs):
+        raise ImportError(f"Word → PDF conversion not available: {e}")
+    
+    def convert_docx_to_pdf(*args, **kwargs):
+        raise ImportError(f"Word → PDF conversion not available: {e}")
 
 class handler(BaseHTTPRequestHandler):
     def do_OPTIONS(self):
@@ -100,17 +104,7 @@ class handler(BaseHTTPRequestHandler):
                 self.wfile.write(error_response.encode())
                 return
             
-            # ONLY Word → PDF conversion - NO FALLBACK
-            if not IMPORTS_AVAILABLE:
-                self.end_headers()
-                error_response = json.dumps({
-                    'success': False,
-                    'error': 'Word → PDF conversion not available',
-                    'message': f'Word → PDF conversion modules could not be imported: {IMPORT_ERROR}',
-                    'technical_details': IMPORT_ERROR
-                })
-                self.wfile.write(error_response.encode())
-                return
+            # FORCE Word → PDF conversion - NO FALLBACK ALLOWED
             
             # Generate PDF using ONLY Word → PDF conversion pipeline
             print("🎯 Generating PDF using Word → PDF conversion pipeline (NO FALLBACK)...", file=sys.stderr)
