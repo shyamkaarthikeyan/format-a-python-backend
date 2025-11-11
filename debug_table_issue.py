@@ -1,161 +1,139 @@
 #!/usr/bin/env python3
 """
-Debug script to identify why tables show only captions but not data in Word documents
+Debug script to isolate the table creation issue.
+This will create a minimal document with just a table to see if it appears in Word.
 """
 
-import json
 import sys
-import os
+from docx import Document
+from docx.shared import Inches, Pt
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
 
-# Add current directory to path
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+def create_simple_table_test():
+    """Create a simple document with just a table to test visibility."""
+    
+    # Create a new document
+    doc = Document()
+    
+    # Add title
+    title_para = doc.add_paragraph()
+    title_run = title_para.add_run("Simple Table Test")
+    title_run.bold = True
+    title_run.font.size = Pt(16)
+    title_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    
+    # Add some text before table
+    doc.add_paragraph("This text should appear before the table.")
+    
+    # Add table caption
+    caption_para = doc.add_paragraph()
+    caption_run = caption_para.add_run("TABLE 1: TEST TABLE CAPTION")
+    caption_run.font.name = "Times New Roman"
+    caption_run.font.size = Pt(9)
+    caption_run.bold = True
+    caption_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    
+    # Create a simple 3x3 table
+    print("Creating simple table...", file=sys.stderr)
+    table = doc.add_table(rows=3, cols=3)
+    print(f"Table created with {len(table.rows)} rows and {len(table.columns)} columns", file=sys.stderr)
+    
+    # Set table style
+    table.style = "Table Grid"
+    table.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    
+    # Add very strong borders to make table visible
+    for row_idx, row in enumerate(table.rows):
+        for col_idx, cell in enumerate(row.cells):
+            # Set cell borders to make table visible
+            tc = cell._element
+            tcPr = tc.get_or_add_tcPr()
+            tcBorders = OxmlElement("w:tcBorders")
+            
+            # Add thick black borders
+            for border_name in ["top", "left", "bottom", "right"]:
+                border = OxmlElement(f"w:{border_name}")
+                border.set(qn("w:val"), "single")
+                border.set(qn("w:sz"), "12")  # Thick border (1.5pt)
+                border.set(qn("w:space"), "0")
+                border.set(qn("w:color"), "000000")  # Black border
+                tcBorders.append(border)
+            
+            tcPr.append(tcBorders)
+            
+            # Add content to cell
+            if row_idx == 0:
+                # Header row
+                cell.text = f"Header {col_idx + 1}"
+                para = cell.paragraphs[0]
+                para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                for run in para.runs:
+                    run.bold = True
+                    run.font.name = "Times New Roman"
+                    run.font.size = Pt(9)
+            else:
+                # Data row
+                cell.text = f"Data {row_idx},{col_idx + 1}"
+                para = cell.paragraphs[0]
+                para.alignment = WD_ALIGN_PARAGRAPH.LEFT
+                for run in para.runs:
+                    run.font.name = "Times New Roman"
+                    run.font.size = Pt(9)
+    
+    print("Table content added", file=sys.stderr)
+    
+    # Add some text after table
+    doc.add_paragraph("This text should appear after the table.")
+    
+    return doc
 
-from ieee_generator_fixed import generate_ieee_document
-
-def debug_table_issue():
-    """Debug table rendering issue - caption appears but table data doesn't"""
-    print("🔍 DEBUGGING TABLE RENDERING ISSUE")
-    print("=" * 50)
-    
-    # Test data that mimics frontend form input
-    test_data = {
-        "title": "Table Debug Test",
-        "abstract": "Testing why table captions appear but table data doesn't.",
-        "keywords": "tables, debugging, word, docx",
-        "authors": [
-            {
-                "name": "Debug User",
-                "organization": "Test Lab",
-                "email": "debug@test.com"
-            }
-        ],
-        "sections": [
-            {
-                "title": "Test Section with Table",
-                "contentBlocks": [
-                    {
-                        "type": "text",
-                        "content": "This text should appear before the table.",
-                        "order": 1
-                    },
-                    {
-                        "type": "table",
-                        "tableType": "interactive",
-                        "tableName": "Debug Test Table",
-                        "caption": "This is a test table for debugging",
-                        "headers": ["Column A", "Column B", "Column C"],
-                        "tableData": [
-                            ["Row 1 A", "Row 1 B", "Row 1 C"],
-                            ["Row 2 A", "Row 2 B", "Row 2 C"],
-                            ["Row 3 A", "Row 3 B", "Row 3 C"]
-                        ],
-                        "order": 2
-                    },
-                    {
-                        "type": "text",
-                        "content": "This text should appear after the table.",
-                        "order": 3
-                    }
-                ]
-            }
-        ],
-        "references": []
-    }
-    
-    print("📊 Debug Data Analysis:")
-    table_block = test_data['sections'][0]['contentBlocks'][1]
-    print(f"  • Table type: {table_block['type']}")
-    print(f"  • Table tableType: {table_block['tableType']}")
-    print(f"  • Table name: {table_block['tableName']}")
-    print(f"  • Table caption: {table_block['caption']}")
-    print(f"  • Headers: {table_block['headers']}")
-    print(f"  • Rows: {len(table_block['tableData'])}")
-    print(f"  • First row: {table_block['tableData'][0]}")
-    
-    # Test the table data extraction logic
-    print("\n🔧 Testing Table Data Extraction:")
-    headers = table_block.get("headers", [])
-    rows_data = table_block.get("tableData", []) or table_block.get("rows", [])
-    
-    print(f"  • Extracted headers: {headers}")
-    print(f"  • Extracted rows_data: {rows_data}")
-    print(f"  • Headers valid: {bool(headers)}")
-    print(f"  • Rows valid: {bool(rows_data)}")
-    
-    if not headers or not rows_data:
-        print("❌ ISSUE FOUND: Headers or rows_data is empty!")
-        print(f"  • Headers empty: {not headers}")
-        print(f"  • Rows empty: {not rows_data}")
-        return False
+def main():
+    """Create and save the simple table test."""
+    print("=== SIMPLE TABLE TEST ===")
     
     try:
-        print("\n📄 Generating DOCX with debug info...")
+        # Create the document
+        doc = create_simple_table_test()
         
-        # Redirect stderr to capture debug output
-        import io
-        from contextlib import redirect_stderr
+        # Save to file
+        output_file = "debug_table_issue_output.docx"
+        doc.save(output_file)
         
-        stderr_capture = io.StringIO()
+        print(f"✅ Simple table test document created: {output_file}")
+        print("\n=== EXPECTED IN DOCUMENT ===")
+        print("1. Title: 'Simple Table Test'")
+        print("2. Text: 'This text should appear before the table.'")
+        print("3. TABLE 1: TEST TABLE CAPTION")
+        print("4. A 3x3 table with thick black borders containing:")
+        print("   - Header row: Header 1, Header 2, Header 3")
+        print("   - Data row 1: Data 1,1, Data 1,2, Data 1,3")
+        print("   - Data row 2: Data 2,1, Data 2,2, Data 2,3")
+        print("5. Text: 'This text should appear after the table.'")
         
-        with redirect_stderr(stderr_capture):
-            docx_buffer = generate_ieee_document(test_data)
+        print("\n=== CRITICAL TEST ===")
+        print("🔍 Open the document in Microsoft Word and check:")
+        print("   ❓ Does the table appear after the caption?")
+        print("   ❓ Are the table borders visible?")
+        print("   ❓ Is the table content (headers and data) visible?")
+        print("   ❓ Is the table properly positioned between the text blocks?")
         
-        debug_output = stderr_capture.getvalue()
+        print("\n=== IF TABLE DOESN'T APPEAR ===")
+        print("This indicates a fundamental issue with table creation in python-docx")
+        print("Possible causes:")
+        print("- Document structure corruption")
+        print("- Table positioning issues")
+        print("- OpenXML formatting conflicts")
+        print("- Word compatibility issues")
         
-        if docx_buffer:
-            file_size = len(docx_buffer)
-            print(f"✅ DOCX generated successfully!")
-            print(f"📁 File size: {file_size} bytes")
-            
-            # Save the test file
-            with open("debug_table_issue_output.docx", "wb") as f:
-                f.write(docx_buffer)
-            print("📁 Saved as: debug_table_issue_output.docx")
-            
-            # Analyze debug output
-            print(f"\n📋 Debug Output Analysis:")
-            if debug_output:
-                print("Debug messages captured:")
-                for line in debug_output.split('\n'):
-                    if line.strip():
-                        print(f"  {line}")
-            else:
-                print("  No debug messages captured")
-            
-            # Check for table-related warnings
-            if "Warning: Interactive table missing headers or data" in debug_output:
-                print("❌ CRITICAL: Table data extraction failed!")
-                return False
-            elif "table" in debug_output.lower():
-                print("✅ Table processing messages found in debug output")
-            
-            print("\n🎯 MANUAL VERIFICATION STEPS:")
-            print("1. Open debug_table_issue_output.docx in Microsoft Word")
-            print("2. Look for:")
-            print("   - Table caption: 'TABLE 1.1: THIS IS A TEST TABLE FOR DEBUGGING'")
-            print("   - Actual table with 3 columns and 3 data rows")
-            print("   - Headers: Column A, Column B, Column C")
-            print("   - Data rows with 'Row X Y' format")
-            print("3. If only caption appears without table data, the issue is confirmed")
-            
-            return True
-            
-        else:
-            print("❌ Failed to generate DOCX document")
-            return False
-            
     except Exception as e:
-        print(f"❌ Error generating document: {e}")
+        print(f"❌ Error creating simple table test: {e}")
         import traceback
         traceback.print_exc()
-        return False
+        return 1
+    
+    return 0
 
 if __name__ == "__main__":
-    success = debug_table_issue()
-    if success:
-        print("\n🎉 DEBUG TEST COMPLETED!")
-        print("Check the generated Word document to verify if tables render correctly.")
-    else:
-        print("\n❌ DEBUG TEST FAILED!")
-    
-    sys.exit(0 if success else 1)
+    sys.exit(main())

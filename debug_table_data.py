@@ -1,152 +1,136 @@
 #!/usr/bin/env python3
 """
-Debug script to specifically test table data processing in DOCX
+Debug script to test table creation in the IEEE generator specifically.
+This will help identify if the issue is in the IEEE generator or elsewhere.
 """
 
-import json
 import sys
-import os
+from ieee_generator_fixed import generate_ieee_document
 
-# Add current directory to path
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-
-from ieee_generator_fixed import build_document_model, render_to_html, generate_ieee_document
-
-def test_table_data():
-    """Test table data processing specifically"""
-    print("🧪 TESTING TABLE DATA PROCESSING")
-    print("=" * 50)
+def create_table_only_test():
+    """Create test data with only a table to isolate the issue."""
     
-    # Create test data with ONLY a table
     test_data = {
-        "title": "Table Test Document",
+        "title": "Table Only Test",
         "authors": [
-            {"name": "Test Author", "department": "Computer Science", "email": "test@university.edu"}
-        ],
-        "abstract": "This document tests table processing.",
-        "keywords": "tables, IEEE format",
-        "sections": [
             {
-                "id": "section1",
-                "title": "Table Test Section",
-                "contentBlocks": [
-                    {
-                        "id": "table1",
-                        "type": "table",
-                        "tableType": "interactive",
-                        "tableName": "Performance Data",
-                        "caption": "System Performance Results",
-                        "headers": ["Algorithm", "Speed (ms)", "Accuracy (%)"],
-                        "tableData": [
-                            ["Method A", "100", "95.5"],
-                            ["Method B", "150", "97.2"],
-                            ["Method C", "80", "93.8"]
-                        ],
-                        "size": "medium",
-                        "order": 1
-                    }
-                ],
-                "order": 1
+                "id": "author_1",
+                "name": "Table Test Author",
+                "email": "table@test.com",
+                "customFields": []
             }
         ],
-        "references": []
+        "abstract": "This document contains only a table to test table visibility.",
+        "keywords": "table, test, debug",
+        "sections": [
+            {
+                "id": "section_1",
+                "title": "Table Test Section",
+                "order": 1,
+                "contentBlocks": [
+                    {
+                        "id": "block_1",
+                        "type": "text",
+                        "content": "This text comes before the table.",
+                        "order": 0
+                    },
+                    {
+                        "id": "block_2",
+                        "type": "table",
+                        "tableName": "Debug Table Name",
+                        "caption": "Debug Table Caption",
+                        "order": 1,
+                        "tableType": "interactive",
+                        "rows": 2,
+                        "columns": 2,
+                        "headers": ["Col A", "Col B"],
+                        "tableData": [
+                            ["Data A1", "Data B1"]
+                        ]
+                    },
+                    {
+                        "id": "block_3",
+                        "type": "text",
+                        "content": "This text comes after the table.",
+                        "order": 2
+                    }
+                ],
+                "subsections": []
+            }
+        ],
+        "references": [],
+        "figures": [],
+        "tables": [],
+        "settings": {
+            "fontSize": "9.5pt",
+            "columns": "double",
+            "exportFormat": "docx",
+            "includePageNumbers": True,
+            "includeCopyright": True
+        }
     }
     
+    return test_data
+
+def main():
+    """Run the table-only test."""
+    print("=== TABLE ONLY TEST ===")
+    
+    test_data = create_table_only_test()
+    
+    print("Test data structure:")
+    table_block = test_data["sections"][0]["contentBlocks"][1]
+    print(f"- Table Type: {table_block.get('tableType')}")
+    print(f"- Headers: {table_block.get('headers')}")
+    print(f"- Data: {table_block.get('tableData')}")
+    print(f"- Rows x Cols: {table_block.get('rows')} x {table_block.get('columns')}")
+    
+    print("\nGenerating document with IEEE generator...")
     try:
-        print("📋 Building document model...")
-        model = build_document_model(test_data)
+        # Generate the document
+        doc_bytes = generate_ieee_document(test_data)
         
-        print("📊 Analyzing model structure:")
-        sections = model.get("sections", [])
+        # Save to file
+        output_file = "debug_table_data_output.docx"
+        with open(output_file, "wb") as f:
+            f.write(doc_bytes)
         
-        for i, section in enumerate(sections):
-            content_blocks = section.get("content_blocks", [])
-            print(f"  Section {i+1}: '{section.get('title', 'Untitled')}'")
-            print(f"    - Content blocks: {len(content_blocks)}")
-            
-            for j, block in enumerate(content_blocks):
-                block_type = block.get("type", "unknown")
-                print(f"      Block {j+1}: {block_type}")
-                
-                if block_type == "table":
-                    print(f"        - Table type: {block.get('table_type', 'not set')}")
-                    print(f"        - Headers: {block.get('headers', 'not set')}")
-                    print(f"        - Table data: {block.get('table_data', 'not set')}")
-                    print(f"        - Caption: {block.get('caption', {}).get('text', 'not set')}")
-                    print(f"        - Raw block data:")
-                    for key, value in block.items():
-                        if key not in ['table_data']:
-                            print(f"          {key}: {value}")
-                        else:
-                            print(f"          {key}: {len(value) if value else 0} rows")
+        print(f"✅ Document generated: {output_file}")
+        print(f"📊 Document size: {len(doc_bytes)} bytes")
         
-        print("\n🌐 Rendering to HTML...")
-        html = render_to_html(model)
+        print("\n=== EXPECTED IN DOCUMENT ===")
+        print("1. Title: 'Table Only Test'")
+        print("2. Author: Table Test Author")
+        print("3. Abstract and keywords")
+        print("4. Section 1: 'Table Test Section'")
+        print("   a. Text: 'This text comes before the table.'")
+        print("   b. TABLE 1.1: DEBUG TABLE CAPTION")
+        print("   c. Actual table with:")
+        print("      - Headers: Col A, Col B")
+        print("      - Data row: Data A1, Data B1")
+        print("   d. Text: 'This text comes after the table.'")
         
-        # Count table elements in HTML
-        table_count = html.count('<table')
-        table_rows = html.count('<tr>')
-        table_cells = html.count('<td>')
+        print("\n=== CRITICAL CHECK ===")
+        print("🔍 Open the document in Word and verify:")
+        print("   ❓ Does TABLE 1.1 caption appear?")
+        print("   ❓ Does the actual table appear immediately after the caption?")
+        print("   ❓ Are the table borders visible?")
+        print("   ❓ Is the table content (Col A, Col B, Data A1, Data B1) visible?")
         
-        print(f"📊 HTML Analysis:")
-        print(f"  • HTML tables: {table_count}")
-        print(f"  • HTML rows: {table_rows}")
-        print(f"  • HTML cells: {table_cells}")
-        
-        # Save HTML for inspection
-        html_file = "debug_table_data_output.html"
-        with open(html_file, 'w', encoding='utf-8') as f:
-            f.write(html)
-        print(f"📁 HTML saved: {html_file}")
-        
-        print("\n📄 Generating DOCX...")
-        docx_bytes = generate_ieee_document(test_data)
-        
-        docx_file = "debug_table_data_output.docx"
-        with open(docx_file, 'wb') as f:
-            f.write(docx_bytes)
-        print(f"📁 DOCX saved: {docx_file} ({len(docx_bytes)} bytes)")
-        
-        # Try to analyze the DOCX content
-        try:
-            from docx import Document
-            doc = Document(docx_file)
-            
-            print(f"\n📄 DOCX Analysis:")
-            print(f"  • Total paragraphs: {len(doc.paragraphs)}")
-            print(f"  • Total tables: {len(doc.tables)}")
-            
-            for i, table in enumerate(doc.tables):
-                print(f"    Table {i+1}: {len(table.rows)} rows, {len(table.columns)} columns")
-                for row_idx, row in enumerate(table.rows):
-                    row_data = [cell.text.strip() for cell in row.cells]
-                    print(f"      Row {row_idx+1}: {row_data}")
-            
-            print(f"  • Paragraph contents:")
-            for i, para in enumerate(doc.paragraphs):
-                text = para.text.strip()
-                if text:
-                    print(f"    Para {i+1}: {text[:100]}{'...' if len(text) > 100 else ''}")
-        
-        except Exception as e:
-            print(f"❌ Error analyzing DOCX: {e}")
-        
-        print(f"\n🎉 TEST COMPLETE!")
-        print("=" * 50)
-        
-        return True
+        print("\n=== DEBUGGING INFO ===")
+        print("If the table doesn't appear, the issue is in:")
+        print("- add_ieee_table() function")
+        print("- Table border generation")
+        print("- Document structure in IEEE generator")
+        print("- Two-column layout interference")
         
     except Exception as e:
-        print(f"❌ Test failed: {e}")
+        print(f"❌ Error: {e}")
         import traceback
         traceback.print_exc()
-        return False
+        return 1
+    
+    return 0
 
 if __name__ == "__main__":
-    print("🚀 Starting table data test...")
-    success = test_table_data()
-    if success:
-        print("✅ Test completed successfully")
-    else:
-        print("❌ Test failed")
-        sys.exit(1)
+    sys.exit(main())
