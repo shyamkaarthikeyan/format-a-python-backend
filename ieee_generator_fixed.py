@@ -732,13 +732,13 @@ def add_ieee_table(doc, table_data, section_idx, table_count):
             table.alignment = WD_ALIGN_PARAGRAPH.CENTER
             table.allow_autofit = True
             
-            # CRITICAL FIX: Set table properties for maximum visibility in two-column layout
+            # CRITICAL FIX: Force table to span both columns for maximum visibility
             tbl = table._element
             tblPr = tbl.xpath('./w:tblPr')[0] if tbl.xpath('./w:tblPr') else OxmlElement('w:tblPr')
             
-            # Force table to be visible by setting explicit width and alignment
+            # Force table to span full page width (both columns)
             tblW = OxmlElement('w:tblW')
-            tblW.set(qn('w:w'), '4770')  # Column width in twips
+            tblW.set(qn('w:w'), '9576')  # Full page width in twips (6.5" * 1440)
             tblW.set(qn('w:type'), 'dxa')  # Use exact measurements
             tblPr.append(tblW)
             
@@ -747,10 +747,15 @@ def add_ieee_table(doc, table_data, section_idx, table_count):
             jc.set(qn('w:val'), 'center')
             tblPr.append(jc)
             
-            # Ensure table layout is fixed for consistent rendering
+            # Force table to be visible with fixed layout
             tblLayout = OxmlElement('w:tblLayout')
             tblLayout.set(qn('w:type'), 'fixed')
             tblPr.append(tblLayout)
+            
+            # CRITICAL: Force table to break out of column constraints
+            tblOverlap = OxmlElement('w:tblOverlap')
+            tblOverlap.set(qn('w:val'), 'never')
+            tblPr.append(tblOverlap)
             
             # Add table properties if not present
             if not tbl.xpath('./w:tblPr'):
@@ -809,7 +814,7 @@ def add_ieee_table(doc, table_data, section_idx, table_count):
                 
             print(f"Set column width to {final_col_width} twips for {num_cols} columns", file=sys.stderr)
 
-            # HEADER ROW - Bold, centered, 9pt Times New Roman
+            # HEADER ROW - Bold, centered, 9pt Times New Roman with MAXIMUM VISIBILITY
             header_row = table.rows[0]
             for col_idx, header in enumerate(headers):
                 cell = header_row.cells[col_idx]
@@ -819,18 +824,20 @@ def add_ieee_table(doc, table_data, section_idx, table_count):
                 para = cell.add_paragraph()
                 run = para.add_run(sanitize_text(str(header)))
                 
-                # EXACT IEEE header formatting: BOLD, CENTERED
+                # MAXIMUM VISIBILITY header formatting
                 run.font.name = "Times New Roman"
-                run.font.size = Pt(9)  # 9pt font for tables
+                run.font.size = Pt(10)  # Slightly larger for visibility
                 run.bold = True  # BOLD headers
+                run.font.color.rgb = None  # Ensure black text
                 para.alignment = WD_ALIGN_PARAGRAPH.CENTER
                 
-                # Add cell borders for visibility
-                cell._element.get_or_add_tcPr()
+                # Force paragraph to be visible
+                para.paragraph_format.space_before = Pt(3)
+                para.paragraph_format.space_after = Pt(3)
                 
                 print(f"Added header: {header}", file=sys.stderr)
 
-            # DATA ROWS - Regular, left-aligned, 9pt Times New Roman
+            # DATA ROWS - Regular, left-aligned, 9pt Times New Roman with MAXIMUM VISIBILITY
             for row_idx, row_data in enumerate(rows_data):
                 table_row = table.rows[row_idx + 1]
                 for col_idx, cell_data in enumerate(row_data):
@@ -842,14 +849,24 @@ def add_ieee_table(doc, table_data, section_idx, table_count):
                         para = cell.add_paragraph()
                         run = para.add_run(sanitize_text(str(cell_data)))
                         
-                        # EXACT IEEE data formatting: REGULAR, LEFT-ALIGNED
+                        # MAXIMUM VISIBILITY data formatting
                         run.font.name = "Times New Roman"
-                        run.font.size = Pt(9)  # 9pt font for table data
+                        run.font.size = Pt(10)  # Slightly larger for visibility
                         run.bold = False  # Regular weight for data
+                        run.font.color.rgb = None  # Ensure black text
                         para.alignment = WD_ALIGN_PARAGRAPH.LEFT
                         
-                        # Add cell borders for visibility
-                        cell._element.get_or_add_tcPr()
+                        # Force paragraph to be visible
+                        para.paragraph_format.space_before = Pt(2)
+                        para.paragraph_format.space_after = Pt(2)
+                        
+                        # CRITICAL: Ensure cell has proper background
+                        tcPr = cell._element.get_or_add_tcPr()
+                        shd = OxmlElement('w:shd')
+                        shd.set(qn('w:val'), 'clear')
+                        shd.set(qn('w:color'), 'auto')
+                        shd.set(qn('w:fill'), 'FFFFFF')  # White background
+                        tcPr.append(shd)
                         
                         print(f"Added data cell [{row_idx}][{col_idx}]: {cell_data}", file=sys.stderr)
 
@@ -1026,6 +1043,14 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
 
             print(f"Table caption: {final_caption}", file=sys.stderr)
 
+            # CRITICAL FIX: Add section break to force table out of column layout
+            # This ensures table spans both columns and is fully visible
+            section_break_para = doc.add_paragraph()
+            section_break_run = section_break_para.add_run()
+            # Force a column break to ensure table visibility
+            from docx.enum.text import WD_BREAK
+            section_break_run.add_break(WD_BREAK.COLUMN)
+
             # Add table caption BEFORE table
             caption_para = doc.add_paragraph()
             caption_run = caption_para.add_run(f"TABLE {section_idx}.{table_count}: {sanitize_text(final_caption).upper()}")
@@ -1039,6 +1064,11 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
             # Add the table content immediately after caption
             add_ieee_table(doc, block, section_idx, table_count)
             print(f"Completed table {table_count} in section {section_idx}", file=sys.stderr)
+            
+            # Add another column break after table to resume normal flow
+            resume_break_para = doc.add_paragraph()
+            resume_break_run = resume_break_para.add_run()
+            resume_break_run.add_break(WD_BREAK.COLUMN)
 
         elif block.get("type") == "text" and block.get("data") and block.get("caption"):
             # Handle text blocks with attached images (React frontend pattern)
