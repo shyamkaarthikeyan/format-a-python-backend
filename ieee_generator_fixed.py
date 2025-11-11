@@ -785,10 +785,8 @@ def add_ieee_table(doc, table_data, section_idx, table_count):
             spacing_after.paragraph_format.space_after = Pt(6)
 
         elif table_type == "image":
-            # Handle image tables
+            # Handle image tables with simple, reliable layout
             if table_data.get("data"):
-                import base64
-
                 try:
                     image_data = table_data["data"]
                     if "," in image_data:
@@ -797,100 +795,46 @@ def add_ieee_table(doc, table_data, section_idx, table_count):
                     image_bytes = base64.b64decode(image_data)
                     image_stream = BytesIO(image_bytes)
 
-                    # Add spacing paragraph BEFORE image to create buffer
-                    pre_spacing_para = doc.add_paragraph()
-                    pre_spacing_para.paragraph_format.space_after = Pt(
-                        24
-                    )  # Large buffer before image
-                    pre_spacing_para.paragraph_format.space_before = Pt(12)
+                    # Simple spacing before image
+                    spacing_para = doc.add_paragraph()
+                    spacing_para.paragraph_format.space_before = Pt(12)
+                    spacing_para.paragraph_format.space_after = Pt(6)
 
-                    # Apply OpenXML spacing for precise control
-                    pre_pPr = pre_spacing_para._element.get_or_add_pPr()
-                    pre_spacing_elem = OxmlElement("w:spacing")
-                    pre_spacing_elem.set(qn("w:after"), "480")  # 24pt after (480 twips)
-                    pre_spacing_elem.set(
-                        qn("w:before"), "240"
-                    )  # 12pt before (240 twips)
-                    pre_pPr.append(pre_spacing_elem)
+                    # Create image paragraph with center alignment
+                    img_para = doc.add_paragraph()
+                    img_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                    img_para.paragraph_format.space_before = Pt(6)
+                    img_para.paragraph_format.space_after = Pt(6)
 
-                    # Add image with enhanced spacing and positioning
-                    para = doc.add_paragraph()
-                    para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-
-                    # AGGRESSIVE spacing to prevent text overlap
-                    para.paragraph_format.space_before = Pt(18)  # Large spacing before
-                    para.paragraph_format.space_after = Pt(18)  # Large spacing after
-                    para.paragraph_format.keep_together = True  # Keep image together
-                    para.paragraph_format.keep_with_next = True  # Keep with caption
-                    para.paragraph_format.page_break_before = (
-                        False  # Don't force page break
-                    )
-
-                    # Apply OpenXML paragraph properties for better control
-                    pPr = para._element.get_or_add_pPr()
-
-                    # Clear existing spacing
-                    for elem in pPr.xpath("./w:spacing"):
-                        pPr.remove(elem)
-
-                    # Add precise spacing control
-                    spacing_elem = OxmlElement("w:spacing")
-                    spacing_elem.set(qn("w:before"), "360")  # 18pt before (360 twips)
-                    spacing_elem.set(qn("w:after"), "360")  # 18pt after (360 twips)
-                    spacing_elem.set(qn("w:line"), "240")  # 12pt line spacing
-                    spacing_elem.set(qn("w:lineRule"), "exact")
-                    pPr.append(spacing_elem)
-
-                    # Add text wrapping and positioning controls
-                    keepNext = OxmlElement("w:keepNext")
-                    keepNext.set(qn("w:val"), "1")
-                    pPr.append(keepNext)
-
-                    keepLines = OxmlElement("w:keepLines")
-                    keepLines.set(qn("w:val"), "1")
-                    pPr.append(keepLines)
-
-                    run = para.add_run()
+                    # Add image to paragraph
+                    run = img_para.add_run()
 
                     # Size based on table size setting
                     size = table_data.get("size", "medium")
                     size_mapping = {
                         "small": Inches(2.0),
                         "medium": Inches(3.0),
-                        "large": Inches(3.3125),  # Full column width
+                        "large": Inches(3.3125),
                     }
                     width = size_mapping.get(size, Inches(3.0))
 
                     picture = run.add_picture(image_stream, width=width)
+                    
+                    # Scale down if too tall
                     if picture.height > IEEE_CONFIG["max_figure_height"]:
                         scale_factor = IEEE_CONFIG["max_figure_height"] / picture.height
                         run.clear()
-                        image_stream.seek(
-                            0
-                        )  # CRITICAL: Reset stream position after clear()
-                        run.add_picture(
+                        image_stream.seek(0)
+                        picture = run.add_picture(
                             image_stream,
                             width=width * scale_factor,
                             height=IEEE_CONFIG["max_figure_height"],
                         )
 
-                    # Add LARGE spacing paragraph after image to prevent overlap
-                    post_spacing_para = doc.add_paragraph()
-                    post_spacing_para.paragraph_format.space_after = Pt(
-                        24
-                    )  # Large buffer after image
-                    post_spacing_para.paragraph_format.space_before = Pt(12)
-
-                    # Add OpenXML spacing control for better positioning
-                    post_pPr = post_spacing_para._element.get_or_add_pPr()
-                    post_spacing_elem = OxmlElement("w:spacing")
-                    post_spacing_elem.set(
-                        qn("w:after"), "480"
-                    )  # 24pt after (480 twips)
-                    post_spacing_elem.set(
-                        qn("w:before"), "240"
-                    )  # 12pt before (240 twips)
-                    post_pPr.append(post_spacing_elem)
+                    # Simple spacing after image
+                    spacing_para_after = doc.add_paragraph()
+                    spacing_para_after.paragraph_format.space_before = Pt(6)
+                    spacing_para_after.paragraph_format.space_after = Pt(12)
 
                 except Exception as e:
                     print(f"Error processing table image: {e}", file=sys.stderr)
@@ -995,54 +939,31 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
             )
 
         elif block.get("type") == "table":
-            # FIXED: Handle table blocks from frontend with GUARANTEED captions
+            # Handle table blocks with proper ordering and single caption
             table_count += 1
             
             print(f"Processing table block in section {section_idx}, table {table_count}", file=sys.stderr)
-            print(f"Table block data: {block}", file=sys.stderr)
 
-            # FIXED: Handle table caption to prevent duplication
+            # Get table caption - prefer caption over tableName
             caption_text = block.get("caption", "").strip()
             table_name = block.get("tableName", "").strip()
+            final_caption = caption_text or table_name or f"Data Table {table_count}"
 
-            # Smart caption selection to avoid duplication
-            if caption_text and table_name:
-                # Check if one contains the other to avoid duplication
-                if table_name.lower() in caption_text.lower():
-                    final_caption = caption_text
-                elif caption_text.lower() in table_name.lower():
-                    final_caption = table_name
-                else:
-                    # Both exist and are different - prefer caption
-                    final_caption = caption_text
-            elif caption_text:
-                final_caption = caption_text
-            elif table_name:
-                final_caption = table_name
-            else:
-                final_caption = f"Data Table {table_count}"
+            print(f"Table caption: {final_caption}", file=sys.stderr)
 
-            print(f"Final table caption: {final_caption}", file=sys.stderr)
+            # Add table caption BEFORE table
+            caption_para = doc.add_paragraph()
+            caption_run = caption_para.add_run(f"TABLE {section_idx}.{table_count}: {sanitize_text(final_caption).upper()}")
+            caption_run.font.name = "Times New Roman"
+            caption_run.font.size = Pt(9)
+            caption_run.bold = True
+            caption_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            caption_para.paragraph_format.space_before = Pt(12)
+            caption_para.paragraph_format.space_after = Pt(6)
 
-            # Add table caption ONCE
-            caption = doc.add_paragraph(
-                f"TABLE {section_idx}.{table_count}: {sanitize_text(final_caption).upper()}"
-            )
-            caption.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            caption.paragraph_format.space_before = Pt(12)  # Increased spacing
-            caption.paragraph_format.space_after = Pt(6)
-            if caption.runs:
-                caption.runs[0].font.name = "Times New Roman"
-                caption.runs[0].font.size = Pt(9)
-                caption.runs[0].bold = True
-                caption.runs[0].italic = False
-
-            print(f"About to call add_ieee_table with block data", file=sys.stderr)
-            # Add the table (without caption since we added it above)
-            # Mark that caption was already added to prevent duplication
-            block["_caption_added"] = True
+            # Add the table content immediately after caption
             add_ieee_table(doc, block, section_idx, table_count)
-            print(f"Completed processing table {table_count} in section {section_idx}", file=sys.stderr)
+            print(f"Completed table {table_count} in section {section_idx}", file=sys.stderr)
 
             # Check if this text block also has an image attached (React frontend pattern)
             if block.get("data") and block.get("caption"):
@@ -1176,77 +1097,85 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
         elif (
             block.get("type") == "image" and block.get("data") and block.get("caption")
         ):
-            # FORCE image count for proper numbering
+            # Handle image blocks with proper ordering and visibility
             img_count = sum(
                 1 for b in content_blocks[: block_idx + 1] if b.get("type") == "image"
             )
 
-            # FORCE image caption BEFORE image
-            caption = doc.add_paragraph(
-                f"FIG. {section_idx}.{img_count}: {sanitize_text(block['caption']).upper()}"
-            )
-            caption.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            caption.paragraph_format.space_before = Pt(6)
-            caption.paragraph_format.space_after = Pt(3)
-            if caption.runs:
-                caption.runs[0].font.name = "Times New Roman"
-                caption.runs[0].font.size = Pt(9)
-                caption.runs[0].bold = True
-                caption.runs[0].italic = False
+            print(f"Processing image block in section {section_idx}, image {img_count}", file=sys.stderr)
 
-            # IMAGE BLOCK FIX - Respect size mapping, center image, prevent overlap
-            import base64
-
+            # Get image size and caption
             size = block.get("size", "medium")
-
-            # EXACT size mapping - Very Small → 1.5", Small → 2.0", Medium → 2.5", Large → 3.3125"
             size_mapping = {
-                "very-small": Inches(1.5),  # Very Small = 1.5"
-                "small": Inches(2.0),  # Small = 2.0"
-                "medium": Inches(2.5),  # Medium = 2.5"
-                "large": Inches(3.3125),  # Large = Full column width
+                "very-small": Inches(1.5),
+                "small": Inches(2.0),
+                "medium": Inches(2.5),
+                "large": Inches(3.3125),
             }
-            width = size_mapping.get(size, Inches(2.5))  # Default to medium
+            width = size_mapping.get(size, Inches(2.5))
+            caption_text = sanitize_text(block['caption'])
+            figure_number = f"FIG. {section_idx}.{img_count}"
 
-            # Decode base64 image data
+            # Add image with simple, reliable layout
             try:
+                import base64
+                # Decode base64 image data
                 image_data = block["data"]
-
-                # Handle base64 data - remove prefix if present
                 if "," in image_data:
                     image_data = image_data.split(",")[1]
-
-                # Decode base64 image data
-                try:
-                    image_bytes = base64.b64decode(image_data)
-                except Exception as e:
-                    print(
-                        f"ERROR: Failed to decode image data: {str(e)}", file=sys.stderr
-                    )
-                    continue
-
-                # Create image stream
+                image_bytes = base64.b64decode(image_data)
                 image_stream = BytesIO(image_bytes)
 
-                # ENHANCED IMAGE BLOCK - Prevent text overlap with aggressive spacing and positioning
+                # Add spacing before image
+                spacing_para = doc.add_paragraph()
+                spacing_para.paragraph_format.space_before = Pt(12)
+                spacing_para.paragraph_format.space_after = Pt(6)
 
-                # Add spacing paragraph BEFORE image to create buffer
-                pre_spacing_para = doc.add_paragraph()
-                pre_spacing_para.paragraph_format.space_after = Pt(
-                    24
-                )  # Large buffer before image
-                pre_spacing_para.paragraph_format.space_before = Pt(12)
+                # Create image paragraph with center alignment
+                img_para = doc.add_paragraph()
+                img_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                img_para.paragraph_format.space_before = Pt(6)
+                img_para.paragraph_format.space_after = Pt(6)
 
-                # Apply OpenXML spacing for precise control
-                pre_pPr = pre_spacing_para._element.get_or_add_pPr()
-                pre_spacing_elem = OxmlElement("w:spacing")
-                pre_spacing_elem.set(qn("w:after"), "480")  # 24pt after (480 twips)
-                pre_spacing_elem.set(qn("w:before"), "240")  # 12pt before (240 twips)
-                pre_pPr.append(pre_spacing_elem)
+                # Add image to paragraph
+                run = img_para.add_run()
+                picture = run.add_picture(image_stream, width=width)
 
-                # Create image paragraph with enhanced positioning
-                para = doc.add_paragraph()
-                para.alignment = WD_ALIGN_PARAGRAPH.CENTER  # CENTER IMAGE
+                # Scale down if too tall
+                if picture.height > IEEE_CONFIG["max_figure_height"]:
+                    scale_factor = IEEE_CONFIG["max_figure_height"] / picture.height
+                    run.clear()
+                    image_stream.seek(0)
+                    picture = run.add_picture(
+                        image_stream,
+                        width=width * scale_factor,
+                        height=IEEE_CONFIG["max_figure_height"],
+                    )
+
+                # Add figure caption immediately after image
+                caption_para = doc.add_paragraph()
+                caption_run = caption_para.add_run(f"{figure_number}: {caption_text.upper()}")
+                caption_run.font.name = "Times New Roman"
+                caption_run.font.size = Pt(9)
+                caption_run.bold = True
+                caption_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                caption_para.paragraph_format.space_before = Pt(3)
+                caption_para.paragraph_format.space_after = Pt(12)
+
+                # Add spacing after caption
+                spacing_para_after = doc.add_paragraph()
+                spacing_para_after.paragraph_format.space_before = Pt(6)
+                spacing_para_after.paragraph_format.space_after = Pt(12)
+
+                print(f"Successfully added image {figure_number}", file=sys.stderr)
+
+            except Exception as e:
+                print(f"Error adding image {figure_number}: {e}", file=sys.stderr)
+                # Add placeholder if image fails
+                para = doc.add_paragraph(f"[Image: {caption_text}]")
+                para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                para.paragraph_format.space_before = Pt(12)
+                para.paragraph_format.space_after = Pt(12)
 
                 # AGGRESSIVE spacing to prevent text overlap
                 para.paragraph_format.space_before = Pt(18)  # Large spacing before
@@ -1948,195 +1877,9 @@ def generate_ieee_document(form_data):
     for idx, section_data in enumerate(form_data.get("sections", []), 1):
         add_section(doc, section_data, idx, is_first_section=(idx == 1))
 
-    # Process standalone tables array (from table-form.tsx)
-    tables = form_data.get("tables", [])
-    if tables:
-        print(f"Processing {len(tables)} standalone tables from tables array", file=sys.stderr)
-        
-        for table_idx, table in enumerate(tables, 1):
-            try:
-                table_type = table.get("type", table.get("tableType", "interactive"))
-                
-                if table_type == "interactive":
-                    # Handle interactive tables
-                    headers = table.get("headers", [])
-                    rows_data = table.get("tableData", [])
-                    
-                    if headers and rows_data:
-                        # Add table using the existing add_ieee_table function
-                        table_data = {
-                            "tableType": "interactive",
-                            "headers": headers,
-                            "tableData": rows_data,
-                            "caption": table.get("caption", table.get("tableName", "")),
-                            "tableName": table.get("tableName", "")
-                        }
-                        add_ieee_table(doc, table_data, 1, table_idx)
-                        print(f"Successfully processed interactive table {table_idx}", file=sys.stderr)
-                
-                elif table_type == "image" and table.get("data"):
-                    # Handle image tables
-                    image_data = table.get("data", "")
-                    if "," in image_data:
-                        image_data = image_data.split(",")[1]
-                    
-                    # Add table name/caption before image
-                    table_name = table.get("tableName", table.get("caption", f"Table {table_idx}"))
-                    if table_name:
-                        caption = doc.add_paragraph(f"TABLE {table_idx}: {sanitize_text(table_name).upper()}")
-                        caption.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                        caption.paragraph_format.space_before = Pt(6)
-                        caption.paragraph_format.space_after = Pt(3)
-                        if caption.runs:
-                            caption.runs[0].font.name = "Times New Roman"
-                            caption.runs[0].font.size = Pt(9)
-                            caption.runs[0].bold = True
-                    
-                    # Add image
-                    try:
-                        image_bytes = base64.b64decode(image_data)
-                        image_stream = BytesIO(image_bytes)
-                        
-                        # Size mapping
-                        size = table.get("size", "medium")
-                        size_mapping = {
-                            "very-small": Inches(1.5),
-                            "small": Inches(2.0),
-                            "medium": Inches(2.5),
-                            "large": Inches(3.3125),
-                        }
-                        width = size_mapping.get(size, Inches(2.5))
-                        
-                        para = doc.add_paragraph()
-                        para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                        para.paragraph_format.space_before = Pt(6)
-                        para.paragraph_format.space_after = Pt(12)
-                        
-                        run = para.add_run()
-                        picture = run.add_picture(image_stream, width=width)
-                        
-                        # Scale if too tall
-                        if picture.height > Inches(4.0):
-                            scale_factor = Inches(4.0) / picture.height
-                            run.clear()
-                            image_stream.seek(0)
-                            run.add_picture(image_stream, width=width * scale_factor, height=Inches(4.0))
-                        
-                        print(f"Successfully processed image table {table_idx}", file=sys.stderr)
-                    except Exception as img_error:
-                        print(f"Error processing image table {table_idx}: {img_error}", file=sys.stderr)
-                
-            except Exception as e:
-                print(f"Error processing table {table_idx}: {e}", file=sys.stderr)
-                continue
-
-    # Process figures array (from figure-form.tsx) - Convert to contentBlocks format
-    figures = form_data.get("figures", [])
-    if figures:
-        print(f"Processing {len(figures)} standalone figures from figures array", file=sys.stderr)
-
-        # Add figures as a separate section or integrate them into existing sections
-        for fig_idx, figure in enumerate(figures, 1):
-            try:
-                # Create figure caption
-                caption_text = figure.get("caption", f"Figure {fig_idx}")
-                caption = doc.add_paragraph(
-                    f"FIG. {fig_idx}: {sanitize_text(caption_text).upper()}"
-                )
-                caption.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                caption.paragraph_format.space_before = Pt(6)
-                caption.paragraph_format.space_after = Pt(3)
-                if caption.runs:
-                    caption.runs[0].font.name = "Times New Roman"
-                    caption.runs[0].font.size = Pt(9)
-                    caption.runs[0].bold = True
-                    caption.runs[0].italic = False
-
-                # Process figure image
-                size = figure.get("size", "medium")
-                size_mapping = {
-                    "very-small": Inches(1.5),
-                    "small": Inches(2.0),
-                    "medium": Inches(2.5),
-                    "large": Inches(3.3125),
-                }
-                width = size_mapping.get(size, Inches(2.5))
-
-                # Get image data
-                image_data = figure.get("data", "")
-                if image_data:
-                    # Handle base64 data - remove prefix if present
-                    if "," in image_data:
-                        image_data = image_data.split(",")[1]
-
-                    # Decode base64 image data
-                    image_bytes = base64.b64decode(image_data)
-                    image_stream = BytesIO(image_bytes)
-
-                    # Add image to document with ENHANCED spacing to prevent overlap
-                    para = doc.add_paragraph()
-                    para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-
-                    # ENHANCED spacing before image to prevent overlap with text
-                    para.paragraph_format.space_before = Pt(18)  # Increased from 12pt
-                    para.paragraph_format.space_after = Pt(18)  # Increased from 12pt
-
-                    # Ensure paragraph doesn't break across columns and stays together
-                    para.paragraph_format.keep_together = True
-                    para.paragraph_format.keep_with_next = True
-                    para.paragraph_format.page_break_before = False
-
-                    # Add column break control to prevent text wrapping issues
-                    pPr = para._element.get_or_add_pPr()
-
-                    # Add spacing control via OpenXML for better positioning
-                    spacing = OxmlElement("w:spacing")
-                    spacing.set(qn("w:before"), "360")  # 18pt before (360 twips)
-                    spacing.set(qn("w:after"), "360")  # 18pt after (360 twips)
-                    spacing.set(qn("w:beforeAutospacing"), "0")
-                    spacing.set(qn("w:afterAutospacing"), "0")
-                    pPr.append(spacing)
-
-                    run = para.add_run()
-                    picture = run.add_picture(image_stream, width=width)
-
-                    # Scale if height > 4", preserve aspect ratio
-                    if picture.height > Inches(4.0):
-                        scale_factor = Inches(4.0) / picture.height
-                        run.clear()
-                        image_stream.seek(
-                            0
-                        )  # CRITICAL: Reset stream position after clear()
-                        run.add_picture(
-                            image_stream, width=width * scale_factor, height=Inches(4.0)
-                        )
-
-                    # Add ENHANCED spacing paragraph after image to prevent overlap
-                    spacing_para = doc.add_paragraph()
-                    spacing_para.paragraph_format.space_after = Pt(
-                        18
-                    )  # Increased from 6pt
-                    spacing_para.paragraph_format.space_before = Pt(0)
-
-                    # Add OpenXML spacing control for better positioning
-                    pPr = spacing_para._element.get_or_add_pPr()
-                    spacing_elem = OxmlElement("w:spacing")
-                    spacing_elem.set(qn("w:after"), "360")  # 18pt after (360 twips)
-                    spacing_elem.set(qn("w:before"), "0")
-                    pPr.append(spacing_elem)
-
-                    print(
-                        f"Successfully processed figure {fig_idx}: {figure.get('originalName', 'Unknown')}",
-                        file=sys.stderr,
-                    )
-                else:
-                    print(
-                        f"Warning: Figure {fig_idx} has no image data", file=sys.stderr
-                    )
-
-            except Exception as e:
-                print(f"Error processing figure {fig_idx}: {e}", file=sys.stderr)
-                continue
+    # NOTE: Standalone tables and figures are now processed through the content blocks system
+    # This ensures proper ordering and prevents duplication
+    print("Standalone tables and figures will be processed through content blocks for proper ordering", file=sys.stderr)
 
     # Add references with EXACT IEEE LaTeX formatting
     add_references(doc, form_data.get("references", []))
