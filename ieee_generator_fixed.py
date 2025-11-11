@@ -1412,7 +1412,7 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
             caption_text = sanitize_text(block['caption'])
             figure_number = f"FIG. {section_idx}.{img_count}"
 
-            # ALTERNATIVE APPROACH: Force image to break out of column layout for maximum visibility
+            # SIMPLE & EFFECTIVE: Create properly sized inline image for 2-column layout
             try:
                 import base64
                 # Decode base64 image data
@@ -1422,47 +1422,76 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
                 image_bytes = base64.b64decode(image_data)
                 image_stream = BytesIO(image_bytes)
 
-                print(f"🔧 Processing image {figure_number} with maximum visibility approach...", file=sys.stderr)
-
-                # CRITICAL FIX: Temporarily break out of column layout for image visibility
-                # Create single-column section for image
-                img_section = doc.add_section(WD_SECTION.CONTINUOUS)
-                img_section.start_type = WD_SECTION.CONTINUOUS
-                
-                # Configure single column for image
-                sectPr = img_section._sectPr
-                existing_cols = sectPr.xpath("./w:cols")
-                for col in existing_cols:
-                    sectPr.remove(col)
-                
-                cols = OxmlElement("w:cols")
-                cols.set(qn("w:num"), "1")  # Single column for maximum image visibility
-                cols.set(qn("w:space"), "0")
-                sectPr.append(cols)
+                print(f"🔧 Processing image {figure_number} for 2-column layout compatibility...", file=sys.stderr)
 
                 # Add spacing before image
                 spacing_before = doc.add_paragraph()
                 spacing_before.paragraph_format.space_before = Pt(6)
                 spacing_before.paragraph_format.space_after = Pt(3)
 
-                # Create image paragraph with center alignment (safe in single column)
+                # Create image paragraph with proper 2-column formatting
                 img_para = doc.add_paragraph()
                 img_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
                 img_para.paragraph_format.space_before = Pt(3)
                 img_para.paragraph_format.space_after = Pt(3)
                 
-                # Add image with maximum visibility settings
+                # Set paragraph properties to prevent clipping in 2-column layout
+                pPr = img_para._element.get_or_add_pPr()
+                
+                # Clear any existing formatting that might interfere
+                for elem in pPr.xpath("./w:spacing | ./w:ind | ./w:jc"):
+                    pPr.remove(elem)
+                
+                # Center alignment for images
+                jc = OxmlElement("w:jc")
+                jc.set(qn("w:val"), "center")
+                pPr.append(jc)
+                
+                # Proper spacing for image visibility
+                spacing = OxmlElement("w:spacing")
+                spacing.set(qn("w:before"), "180")  # 9pt before
+                spacing.set(qn("w:after"), "180")   # 9pt after
+                spacing.set(qn("w:line"), "240")    # 12pt line height
+                spacing.set(qn("w:lineRule"), "exact")
+                pPr.append(spacing)
+                
+                # Ensure no indentation that might cause clipping
+                ind = OxmlElement("w:ind")
+                ind.set(qn("w:left"), "0")
+                ind.set(qn("w:right"), "0")
+                pPr.append(ind)
+                
+                # Add image with proper sizing for 2-column layout
                 run = img_para.add_run()
                 
-                # Use larger width since we're in single column mode
-                single_col_width = min(width * 1.5, Inches(4.5))  # Can be larger in single column
-                picture = run.add_picture(image_stream, width=single_col_width)
+                # Ensure image fits comfortably within column width (leave margin for safety)
+                max_col_width = Inches(2.8)  # Slightly smaller than column width for safety
+                if width > max_col_width:
+                    width = max_col_width
+                
+                picture = run.add_picture(image_stream, width=width)
                 
                 # Set comprehensive image properties for maximum visibility
                 inline = picture._inline
                 docPr = inline.docPr
                 docPr.set('name', f'Figure_{section_idx}_{img_count}')
                 docPr.set('descr', f'Section Figure: {caption_text}')
+                
+                # Ensure image has proper positioning within the paragraph
+                graphic = inline.graphic
+                graphicData = graphic.graphicData
+                pic = graphicData.pic
+                
+                # Set image properties for maximum visibility
+                spPr = pic.spPr
+                if spPr is not None:
+                    xfrm = spPr.xfrm
+                    if xfrm is not None:
+                        # Ensure image is properly positioned
+                        off = xfrm.off
+                        if off is not None:
+                            off.set('x', '0')
+                            off.set('y', '0')
                 
                 # Scale down if too tall
                 if picture.height > IEEE_CONFIG["max_figure_height"]:
@@ -1471,11 +1500,17 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
                     image_stream.seek(0)
                     picture = run.add_picture(
                         image_stream,
-                        width=single_col_width * scale_factor,
+                        width=width * scale_factor,
                         height=IEEE_CONFIG["max_figure_height"],
                     )
+                    
+                    # Reapply properties after scaling
+                    inline = picture._inline
+                    docPr = inline.docPr
+                    docPr.set('name', f'Figure_{section_idx}_{img_count}_scaled')
+                    docPr.set('descr', f'Section Figure: {caption_text} (scaled)')
 
-                # Add figure caption
+                # Add figure caption in separate paragraph
                 caption_para = doc.add_paragraph()
                 caption_run = caption_para.add_run(f"{figure_number}: {caption_text.upper()}")
                 caption_run.font.name = "Times New Roman"
@@ -1483,36 +1518,14 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
                 caption_run.bold = True
                 caption_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
                 caption_para.paragraph_format.space_before = Pt(3)
-                caption_para.paragraph_format.space_after = Pt(6)
+                caption_para.paragraph_format.space_after = Pt(12)
 
-                # Add spacing after image
+                # Add spacing after caption
                 spacing_after = doc.add_paragraph()
                 spacing_after.paragraph_format.space_before = Pt(3)
                 spacing_after.paragraph_format.space_after = Pt(6)
 
-                # RESUME 2-COLUMN LAYOUT after image
-                resume_section = doc.add_section(WD_SECTION.CONTINUOUS)
-                resume_section.start_type = WD_SECTION.CONTINUOUS
-                
-                # Configure back to two columns
-                sectPr = resume_section._sectPr
-                existing_cols = sectPr.xpath("./w:cols")
-                for col in existing_cols:
-                    sectPr.remove(col)
-                
-                cols = OxmlElement("w:cols")
-                cols.set(qn("w:num"), "2")  # Back to two columns
-                cols.set(qn("w:space"), "360")  # 0.25" gap
-                cols.set(qn("w:equalWidth"), "1")
-                
-                for i in range(2):
-                    col = OxmlElement("w:col")
-                    col.set(qn("w:w"), "4770")  # 3.3125" width per column
-                    cols.append(col)
-                
-                sectPr.append(cols)
-
-                print(f"✅ Successfully added image {figure_number} with maximum visibility", file=sys.stderr)
+                print(f"✅ Successfully added image {figure_number} optimized for 2-column layout", file=sys.stderr)
 
             except Exception as e:
                 print(f"❌ Error adding image {figure_number}: {e}", file=sys.stderr)
