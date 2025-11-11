@@ -718,9 +718,29 @@ def add_ieee_table(doc, table_data, section_idx, table_count):
             print(f"Creating table with {num_rows} rows and {num_cols} columns", file=sys.stderr)
 
             table = doc.add_table(rows=num_rows, cols=num_cols)
+            print(f"Table created successfully with {len(table.rows)} rows and {len(table.columns)} columns", file=sys.stderr)
             table.style = "Table Grid"
             table.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            table.allow_autofit = True  # CHANGED: Allow autofit for better visibility
+            table.allow_autofit = True
+            
+            # Ensure table has visible borders
+            for row in table.rows:
+                for cell in row.cells:
+                    # Set cell borders to make table visible
+                    tc = cell._element
+                    tcPr = tc.get_or_add_tcPr()
+                    tcBorders = OxmlElement("w:tcBorders")
+                    
+                    # Add all borders (top, left, bottom, right)
+                    for border_name in ["top", "left", "bottom", "right"]:
+                        border = OxmlElement(f"w:{border_name}")
+                        border.set(qn("w:val"), "single")
+                        border.set(qn("w:sz"), "4")  # 0.5pt border
+                        border.set(qn("w:space"), "0")
+                        border.set(qn("w:color"), "000000")  # Black border
+                        tcBorders.append(border)
+                    
+                    tcPr.append(tcBorders)
 
             # Set column widths in twips (integer values required)
             available_width_twips = 6480  # ~4.5 inches in twips (6.5" - margins)
@@ -1126,18 +1146,14 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
                 image_bytes = base64.b64decode(image_data)
                 image_stream = BytesIO(image_bytes)
 
-                # Add spacing before image
-                spacing_para = doc.add_paragraph()
-                spacing_para.paragraph_format.space_before = Pt(12)
-                spacing_para.paragraph_format.space_after = Pt(6)
+                # Add simple spacing before image
+                doc.add_paragraph().paragraph_format.space_after = Pt(6)
 
-                # Create image paragraph with center alignment
+                # Create simple image paragraph
                 img_para = doc.add_paragraph()
                 img_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                img_para.paragraph_format.space_before = Pt(6)
-                img_para.paragraph_format.space_after = Pt(6)
-
-                # Add image to paragraph
+                
+                # Add image with minimal formatting to ensure visibility
                 run = img_para.add_run()
                 picture = run.add_picture(image_stream, width=width)
 
@@ -1159,13 +1175,9 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
                 caption_run.font.size = Pt(9)
                 caption_run.bold = True
                 caption_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                caption_para.paragraph_format.space_before = Pt(3)
-                caption_para.paragraph_format.space_after = Pt(12)
 
-                # Add spacing after caption
-                spacing_para_after = doc.add_paragraph()
-                spacing_para_after.paragraph_format.space_before = Pt(6)
-                spacing_para_after.paragraph_format.space_after = Pt(12)
+                # Add simple spacing after caption
+                doc.add_paragraph().paragraph_format.space_after = Pt(12)
 
                 print(f"Successfully added image {figure_number}", file=sys.stderr)
 
