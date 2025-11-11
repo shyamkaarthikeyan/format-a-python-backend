@@ -37,14 +37,10 @@ class handler(BaseHTTPRequestHandler):
                 self.send_error_response(400, 'Title is required')
                 return
             
-            # Check if this is a PDF request (download or preview)
-            if document_data.get('format') == 'pdf':
-                if document_data.get('action') == 'download':
-                    self.handle_pdf_download(document_data)
-                    return
-                elif document_data.get('action') == 'preview':
-                    self.handle_pdf_preview(document_data)
-                    return
+            # Check if this is a DOCX→PDF conversion request
+            if document_data.get('format') == 'docx-to-pdf':
+                self.handle_docx_to_pdf_conversion(document_data)
+                return
             
             # Check if this is a DOCX download request
             if document_data.get('format') == 'docx' and document_data.get('action') == 'download':
@@ -85,8 +81,8 @@ class handler(BaseHTTPRequestHandler):
         except Exception as e:
             self.send_error_response(500, f'Document generation failed: {str(e)}')
     
-    def handle_pdf_download(self, document_data):
-        """Handle PDF download requests - Generate Word document then convert to PDF"""
+    def handle_docx_to_pdf_conversion(self, request_data):
+        """Handle DOCX to PDF conversion requests - Word→PDF conversion ONLY"""
         try:
             import base64
             
@@ -94,25 +90,28 @@ class handler(BaseHTTPRequestHandler):
             sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
             from docx_to_pdf_converter import convert_docx_to_pdf
             
-            print("🎯 Starting Word → PDF conversion pipeline...", file=sys.stderr)
+            print("🎯 Starting Word→PDF conversion...", file=sys.stderr)
             
-            # Step 1: Generate DOCX document
-            print("📝 Generating IEEE Word document...", file=sys.stderr)
-            docx_bytes = generate_ieee_document(document_data)
+            # Get DOCX data from request
+            docx_data_b64 = request_data.get('docx_data')
+            if not docx_data_b64:
+                raise Exception("No DOCX data provided for conversion")
+            
+            # Decode base64 DOCX data
+            docx_bytes = base64.b64decode(docx_data_b64)
             
             if not docx_bytes or len(docx_bytes) == 0:
-                raise Exception("Generated Word document is empty")
+                raise Exception("Invalid DOCX data for conversion")
             
-            print(f"✅ Word document generated successfully, size: {len(docx_bytes)} bytes", file=sys.stderr)
+            print(f"📄 Converting DOCX to PDF (input size: {len(docx_bytes)} bytes)...", file=sys.stderr)
             
-            # Step 2: Convert Word document to PDF
-            print("📄 Converting Word document to PDF...", file=sys.stderr)
+            # Convert DOCX to PDF using ReportLab
             pdf_bytes = convert_docx_to_pdf(docx_bytes)
             
             if not pdf_bytes or len(pdf_bytes) == 0:
-                raise Exception("PDF conversion failed - empty result")
+                raise Exception("Word→PDF conversion failed - empty result")
             
-            print(f"✅ PDF generated successfully from Word document, size: {len(pdf_bytes)} bytes", file=sys.stderr)
+            print(f"✅ Word→PDF conversion successful, output size: {len(pdf_bytes)} bytes", file=sys.stderr)
             
             # Convert to base64 for JSON response
             pdf_base64 = base64.b64encode(pdf_bytes).decode('utf-8')
@@ -132,7 +131,7 @@ class handler(BaseHTTPRequestHandler):
                 'file_data': pdf_base64,
                 'file_type': 'application/pdf',
                 'file_size': len(pdf_bytes),
-                'message': 'PDF document generated successfully from Word document',
+                'message': 'PDF generated successfully via Word→PDF conversion',
                 'conversion_method': 'word_to_pdf_reportlab',
                 'requested_format': 'pdf',
                 'actual_format': 'pdf'
@@ -141,68 +140,8 @@ class handler(BaseHTTPRequestHandler):
             self.wfile.write(json.dumps(response).encode('utf-8'))
             
         except Exception as e:
-            print(f"❌ Word → PDF conversion failed: {e}", file=sys.stderr)
-            self.send_error_response(500, f'PDF generation failed: {str(e)}')
-
-    def handle_pdf_preview(self, document_data):
-        """Handle PDF preview requests - Generate Word document then convert to PDF for preview"""
-        try:
-            import base64
-            
-            # Import the DOCX to PDF converter
-            sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-            from docx_to_pdf_converter import convert_docx_to_pdf
-            
-            print("🎯 Starting Word → PDF conversion pipeline for preview...", file=sys.stderr)
-            
-            # Step 1: Generate DOCX document
-            print("📝 Generating IEEE Word document for preview...", file=sys.stderr)
-            docx_bytes = generate_ieee_document(document_data)
-            
-            if not docx_bytes or len(docx_bytes) == 0:
-                raise Exception("Generated Word document is empty")
-            
-            print(f"✅ Word document generated successfully for preview, size: {len(docx_bytes)} bytes", file=sys.stderr)
-            
-            # Step 2: Convert Word document to PDF
-            print("📄 Converting Word document to PDF for preview...", file=sys.stderr)
-            pdf_bytes = convert_docx_to_pdf(docx_bytes)
-            
-            if not pdf_bytes or len(pdf_bytes) == 0:
-                raise Exception("PDF conversion failed - empty result")
-            
-            print(f"✅ PDF preview generated successfully from Word document, size: {len(pdf_bytes)} bytes", file=sys.stderr)
-            
-            # Convert to base64 for JSON response
-            pdf_base64 = base64.b64encode(pdf_bytes).decode('utf-8')
-            
-            # Send success response with CORS headers
-            self.send_response(200)
-            self.send_header('Content-Type', 'application/json')
-            # Use environment-aware CORS
-            if os.getenv('NODE_ENV') == 'development':
-                self.send_header('Access-Control-Allow-Origin', '*')
-            else:
-                self.send_header('Access-Control-Allow-Origin', 'https://format-a.vercel.app')
-            self.end_headers()
-            
-            response = {
-                'success': True,
-                'file_data': pdf_base64,
-                'file_type': 'application/pdf',
-                'file_size': len(pdf_bytes),
-                'message': 'PDF preview generated successfully from Word document',
-                'conversion_method': 'word_to_pdf_reportlab',
-                'requested_format': 'pdf',
-                'actual_format': 'pdf',
-                'is_preview': True
-            }
-            
-            self.wfile.write(json.dumps(response).encode('utf-8'))
-            
-        except Exception as e:
-            print(f"❌ Word → PDF preview conversion failed: {e}", file=sys.stderr)
-            self.send_error_response(500, f'PDF preview generation failed: {str(e)}')
+            print(f"❌ Word→PDF conversion failed: {e}", file=sys.stderr)
+            self.send_error_response(500, f'Word→PDF conversion failed: {str(e)}')
 
     def handle_docx_download(self, document_data):
         """Handle DOCX download requests"""
