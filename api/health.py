@@ -82,17 +82,11 @@ class handler(BaseHTTPRequestHandler):
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
             
-            # Import and use CORS utilities
-            try:
-                sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-                from cors_utils import set_cors_headers
-                origin = self.headers.get('Origin')
-                set_cors_headers(self, origin)
-            except ImportError:
-                # Fallback CORS headers
-                self.send_header('Access-Control-Allow-Origin', '*')
-                self.send_header('Access-Control-Allow-Methods', 'GET, OPTIONS')
-                self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+            # Import and use CORS utilities - no fallback
+            sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            from cors_utils import set_cors_headers
+            origin = self.headers.get('Origin')
+            set_cors_headers(self, origin)
             
             self.end_headers()
             
@@ -523,16 +517,10 @@ class handler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header('Content-Type', 'application/json')
         
-        # Import and use CORS utilities
-        try:
-            from cors_utils import set_cors_headers
-            origin = self.headers.get('Origin')
-            set_cors_headers(self, origin)
-        except ImportError:
-            # Fallback CORS headers
-            self.send_header('Access-Control-Allow-Origin', '*')
-            self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-            self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+        # Import and use CORS utilities - no fallback
+        from cors_utils import set_cors_headers
+        origin = self.headers.get('Origin')
+        set_cors_headers(self, origin)
         
         self.end_headers()
         
@@ -545,19 +533,11 @@ class handler(BaseHTTPRequestHandler):
         self.wfile.write(json.dumps(response, indent=2).encode())
     
     def do_OPTIONS(self):
-        """Handle CORS preflight requests"""
-        try:
-            sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-            from cors_utils import handle_preflight
-            origin = self.headers.get('Origin')
-            handle_preflight(self, origin)
-        except ImportError:
-            # Fallback CORS handling
-            self.send_response(200)
-            self.send_header('Access-Control-Allow-Origin', '*')
-            self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-            self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization')
-            self.end_headers()
+        """Handle CORS preflight requests - no fallback"""
+        sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        from cors_utils import handle_preflight
+        origin = self.headers.get('Origin')
+        handle_preflight(self, origin)
     
     def send_error_response(self, status_code: int, message: str, details: str = None):
         """Send standardized error response"""
