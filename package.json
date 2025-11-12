@@ -1,0 +1,17 @@
+{
+  "name": "format-a-pdf-converter",
+  "version": "1.0.0",
+  "description": "PDFKit + docx manual layout converter for IEEE 2-column formatting",
+  "main": "pdf_converter.js",
+  "scripts": {
+    "start": "node pdf_converter.js"
+  },
+  "dependencies": {
+    "docx": "^8.5.0",
+    "pdfkit": "^0.14.0",
+    "fs": "^0.0.1-security"
+  },
+  "engines": {
+    "node": "18.x"
+  }
+}
