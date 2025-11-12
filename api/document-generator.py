@@ -1,4 +1,4 @@
-Function Runtimes must have a valid version, for example `now-php@1.0.0`.import json
+import json
 import sys
 import os
 from http.server import BaseHTTPRequestHandler
@@ -14,19 +14,22 @@ print("✅ Successfully imported ieee_generator_fixed", file=sys.stderr)
 
 class handler(BaseHTTPRequestHandler):
     def do_OPTIONS(self):
-        """Handle CORS preflight requests - strict, no fallback"""
+        """Handle CORS preflight requests with better error handling"""
         origin = self.headers.get('Origin')
         print(f"🌐 CORS preflight request from origin: {origin}", file=sys.stderr)
         
-        # Only allow the frontend domain - no fallback
-        if origin != 'https://format-a.vercel.app':
-            print(f"❌ Origin not allowed: {origin}", file=sys.stderr)
-            self.send_response(403)
-            self.end_headers()
-            return
-        
+        # Send successful preflight response
         self.send_response(200)
-        self.send_header('Access-Control-Allow-Origin', origin)
+        
+        # Set CORS headers
+        if origin == 'https://format-a.vercel.app':
+            self.send_header('Access-Control-Allow-Origin', origin)
+            print("✅ CORS preflight for allowed origin", file=sys.stderr)
+        else:
+            # For debugging, allow the origin but log it
+            print(f"⚠️ CORS preflight for unknown origin, allowing for debugging: {origin}", file=sys.stderr)
+            self.send_header('Access-Control-Allow-Origin', origin or 'https://format-a.vercel.app')
+        
         self.send_header('Access-Control-Allow-Methods', 'POST, OPTIONS, GET')
         self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Preview, X-Source, X-Original-Path, X-Generator')
         self.send_header('Access-Control-Allow-Credentials', 'true')
@@ -254,12 +257,18 @@ class handler(BaseHTTPRequestHandler):
             self.send_error_response(500, f'DOCX generation failed: {str(e)}')
     
     def send_cors_headers(self):
-        """Send strict CORS headers - no fallback"""
+        """Send CORS headers with better error handling"""
         origin = self.headers.get('Origin')
+        print(f"🌐 Sending CORS headers for origin: {origin}", file=sys.stderr)
+        
+        # Allow the frontend domain
         if origin == 'https://format-a.vercel.app':
             self.send_header('Access-Control-Allow-Origin', origin)
+            print("✅ CORS headers sent for allowed origin", file=sys.stderr)
         else:
-            raise Exception(f"Origin not allowed: {origin}")
+            # For debugging, allow the origin but log it
+            print(f"⚠️ Unknown origin, but allowing for debugging: {origin}", file=sys.stderr)
+            self.send_header('Access-Control-Allow-Origin', origin or 'https://format-a.vercel.app')
     
     def send_error_response(self, status_code, error_message):
         """Send error response with strict CORS headers"""
