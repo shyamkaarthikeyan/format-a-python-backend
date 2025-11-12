@@ -144,7 +144,7 @@ def check_setup():
     print("📦 Checking Python dependencies...")
     try:
         import docx
-        import reportlab
+        # reportlab removed - no fallback PDF generation allowed
         import psycopg2
         import jwt
         print("✅ All Python dependencies installed")

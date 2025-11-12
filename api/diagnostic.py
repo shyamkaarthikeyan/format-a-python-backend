@@ -65,10 +65,10 @@ class handler(BaseHTTPRequestHandler):
                 diagnostic_info['imports']['cors_utils'] = f'failed: {str(e)}'
             
             try:
-                from docx_to_pdf_converter import convert_docx_to_pdf
-                diagnostic_info['imports']['docx_to_pdf_converter'] = 'success'
+                from docx_to_pdf_converter_fixed import convert_docx_to_pdf_direct
+                diagnostic_info['imports']['docx_to_pdf_converter_fixed'] = 'success'
             except Exception as e:
-                diagnostic_info['imports']['docx_to_pdf_converter'] = f'failed: {str(e)}'
+                diagnostic_info['imports']['docx_to_pdf_converter_fixed'] = f'failed: {str(e)}'
             
             # Send response
             self.send_response(200)

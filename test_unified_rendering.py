@@ -15,8 +15,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from ieee_generator_fixed import (
     build_document_model, 
     render_to_html, 
-    generate_ieee_document,
-    weasyprint_pdf_from_html
+    generate_ieee_document
+    # weasyprint_pdf_from_html removed - no fallback PDF generation
 )
 
 def create_test_document():
