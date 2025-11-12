@@ -3824,30 +3824,6 @@ def html_to_docx_converter(html):
 
 
 # Large PDF generation function removed - using Word→PDF conversion only
-        .keep-together {{
-            page-break-inside: avoid;
-        }}
-    </style>
-</head>
-<body>
-    <div class="ieee-title">{title}</div>
-    {authors_html}
-
-    <div class="ieee-two-column">
-        {f'<div class="ieee-abstract"><strong>Abstract—</strong>{abstract}</div>' if abstract else ''}
-        {f'<div class="ieee-keywords"><strong>Index Terms—</strong>{keywords}</div>' if keywords else ''}
-
-        {sections_html}
-
-        {references_html}
-    </div>
-</body>
-</html>"""
-
-    try:
-        # Try to import and use WeasyPrint for perfect PDF generation
-        from weasyprint import CSS, HTML
-        from weasyprint.text.fonts import FontConfiguration
 
         # Create font configuration for better typography
         font_config = FontConfiguration()
