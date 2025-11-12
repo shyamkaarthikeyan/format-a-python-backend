@@ -3863,230 +3863,29 @@ def html_to_docx_converter(html):
         return None
 
 
-# Large PDF generation function removed - using Word→PDF conversion only
+# ============================================================================
+# ALL PDF GENERATION FUNCTIONS REMOVED - USING WORD→PDF CONVERSION ONLY
+# ============================================================================
+# 
+# This ensures that PDF format exactly matches Word format by using the same
+# source document (Word) and converting it to PDF, rather than generating
+# PDF from HTML or other sources which can have different formatting.
+#
+# PDF generation now follows this flow:
+# 1. Generate Word document using generate_ieee_document()
+# 2. Convert Word→PDF using docx_to_pdf_converter_fixed.py
+# 3. Both preview and download use the same Word→PDF conversion
+#
+# This guarantees identical formatting between preview and download.
+# ============================================================================
 
-        # Create font configuration for better typography
-        font_config = FontConfiguration()
-
-        # Additional CSS for even better justification
-        additional_css = CSS(
-            string="""
-            @page {
-                margin: 0.75in;
-                size: letter;
-            }
-
-            body {
-                text-rendering: optimizeLegibility;
-                font-variant-ligatures: common-ligatures;
-                font-feature-settings: "liga" 1, "kern" 1;
-            }
-
-            /* FORCE FULL JUSTIFICATION - Match Word document justification */
-            .ieee-paragraph, .ieee-abstract, .ieee-keywords, .ieee-reference, p {
-                text-align: justify !important;
-                text-align-last: justify !important;
-                text-justify: inter-word !important;
-                hyphens: auto !important;
-                word-break: normal;
-                overflow-wrap: break-word;
-                line-height: 1.2 !important;
-            }
-        """
-        )
-
-        # Generate PDF with WeasyPrint
-        html_doc = HTML(string=html)
-        pdf_bytes = html_doc.write_pdf(
-            stylesheets=[additional_css], font_config=font_config, optimize_images=True
-        )
-
-        print(
-            "✅ PDF generated with WeasyPrint - perfect justification achieved",
-            file=sys.stderr,
-        )
-        return pdf_bytes
-
-    except (ImportError, OSError) as e:
-        print(
-            f"⚠️ WeasyPrint not available ({e}), using ReportLab for PDF generation",
-            file=sys.stderr,
-        )
-
-        # Fallback: Use ReportLab for better PDF generation with justification
-        try:
-            import io
-
-            from reportlab.lib import colors
-            from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY
-            from reportlab.lib.pagesizes import letter
-            from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
-            from reportlab.lib.units import inch
-            from reportlab.pdfgen import canvas
-            from reportlab.platypus import (
-                Image,
-                Paragraph,
-                SimpleDocTemplate,
-                Spacer,
-                Table,
-                TableStyle,
-            )
-
-            # Create PDF buffer
-            buffer = BytesIO()
-
-            # Create document with IEEE margins
-            doc = SimpleDocTemplate(
-                buffer,
-                pagesize=letter,
-                rightMargin=0.75 * inch,
-                leftMargin=0.75 * inch,
-                topMargin=0.75 * inch,
-                bottomMargin=0.75 * inch,
-            )
-
-            # Create styles for IEEE formatting
-            styles = getSampleStyleSheet()
-
-            # IEEE Title style
-            title_style = ParagraphStyle(
-                "IEEETitle",
-                parent=styles["Title"],
-                fontSize=24,
-                fontName="Times-Bold",
-                alignment=TA_CENTER,
-                spaceAfter=20,
-            )
-
-            # IEEE Body style with perfect justification
-            body_style = ParagraphStyle(
-                "IEEEBody",
-                parent=styles["Normal"],
-                fontSize=10,
-                fontName="Times-Roman",
-                alignment=TA_JUSTIFY,
-                spaceAfter=12,
-                leftIndent=0,
-                rightIndent=0,
-                wordWrap="LTR",
-            )
-
-            # IEEE Abstract style
-            abstract_style = ParagraphStyle(
-                "IEEEAbstract",
-                parent=body_style,
-                fontSize=9,
-                fontName="Times-Bold",
-                alignment=TA_JUSTIFY,
-            )
-
-            # Build document content
-            story = []
-
-            # Add title
-            story.append(Paragraph(title, title_style))
-            story.append(Spacer(1, 12))
-
-            # Add authors (simplified for ReportLab)
-            if authors:
-                author_text = ", ".join([author.get("name", "") for author in authors])
-                author_style = ParagraphStyle(
-                    "IEEEAuthor",
-                    parent=styles["Normal"],
-                    fontSize=10,
-                    fontName="Times-Roman",
-                    alignment=TA_CENTER,
-                )
-                story.append(Paragraph(author_text, author_style))
-                story.append(Spacer(1, 20))
-
-            # Add abstract
-            if abstract:
-                story.append(Paragraph(f"<b>Abstract—</b>{abstract}", abstract_style))
-                story.append(Spacer(1, 12))
-
-            # Add keywords
-            if keywords:
-                story.append(
-                    Paragraph(f"<b>Index Terms—</b>{keywords}", abstract_style)
-                )
-                story.append(Spacer(1, 20))
-
-            # Add sections
-            for i, section in enumerate(sections, 1):
-                section_title = sanitize_text(section.get("title", ""))
-                if section_title:
-                    heading_style = ParagraphStyle(
-                        "IEEEHeading",
-                        parent=styles["Heading1"],
-                        fontSize=10,
-                        fontName="Times-Bold",
-                        alignment=TA_CENTER,
-                        spaceAfter=6,
-                        spaceBefore=15,
-                    )
-                    story.append(
-                        Paragraph(f"{i}. {section_title.upper()}", heading_style)
-                    )
-
-                # Process content blocks
-                content_blocks = section.get("contentBlocks", [])
-                for block in content_blocks:
-                    if block.get("type") == "text" and block.get("content"):
-                        content = sanitize_text(block["content"])
-                        story.append(Paragraph(content, body_style))
-
-            # Add references
-            if references:
-                heading_style = ParagraphStyle(
-                    "IEEEHeading",
-                    parent=styles["Heading1"],
-                    fontSize=10,
-                    fontName="Times-Bold",
-                    alignment=TA_CENTER,
-                    spaceAfter=6,
-                    spaceBefore=15,
-                )
-                story.append(Paragraph("REFERENCES", heading_style))
-
-                ref_style = ParagraphStyle(
-                    "IEEEReference",
-                    parent=body_style,
-                    fontSize=9,
-                    leftIndent=15,
-                    firstLineIndent=-15,
-                )
-
-                for i, ref in enumerate(references, 1):
-                    ref_text = (
-                        sanitize_text(ref.get("text", ""))
-                        if isinstance(ref, dict)
-                        else sanitize_text(str(ref))
-                    )
-                    if ref_text:
-                        story.append(Paragraph(f"[{i}] {ref_text}", ref_style))
-
-            # Build PDF
-            doc.build(story)
-
-            # Get PDF bytes
-            buffer.seek(0)
-            pdf_bytes = buffer.getvalue()
-            buffer.close()
-
-            print(
-                "✅ PDF generated with ReportLab - good justification achieved",
-                file=sys.stderr,
-            )
-            return pdf_bytes
-
-        except ImportError as reportlab_error:
-            print(
-                f"❌ ReportLab also not available: {reportlab_error}", file=sys.stderr
-            )
-            raise Exception(
-                "PDF generation requires WeasyPrint or ReportLab. Both are unavailable."
-            )
+def generate_pdf_removed():
+    """
+    PDF generation has been removed from this module.
+    Use Word→PDF conversion instead for consistent formatting.
+    """
+    print("❌ Direct PDF generation removed - use Word→PDF conversion instead", file=sys.stderr)
+    raise Exception("Direct PDF generation not supported - use Word→PDF conversion only")
 
 
 def main():
