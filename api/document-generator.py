@@ -14,15 +14,26 @@ from ieee_generator_fixed import generate_ieee_document
 class handler(BaseHTTPRequestHandler):
     def do_OPTIONS(self):
         """Handle CORS preflight requests"""
-        self.send_response(200)
-        # Allow localhost for development
-        if os.getenv('NODE_ENV') == 'development':
-            self.send_header('Access-Control-Allow-Origin', '*')
-        else:
+        try:
+            # Import CORS utilities
+            sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+            from cors_utils import handle_preflight
+            
+            origin = self.headers.get('Origin')
+            print(f"🌐 CORS preflight request from origin: {origin}", file=sys.stderr)
+            
+            handle_preflight(self, origin)
+            print("✅ CORS preflight handled successfully", file=sys.stderr)
+            
+        except Exception as e:
+            print(f"❌ CORS preflight failed: {e}", file=sys.stderr)
+            # Fallback CORS handling
+            self.send_response(200)
             self.send_header('Access-Control-Allow-Origin', 'https://format-a.vercel.app')
-        self.send_header('Access-Control-Allow-Methods', 'POST, OPTIONS')
-        self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Preview')
-        self.end_headers()
+            self.send_header('Access-Control-Allow-Methods', 'POST, OPTIONS, GET')
+            self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Preview, X-Source, X-Original-Path, X-Generator')
+            self.send_header('Access-Control-Max-Age', '86400')
+            self.end_headers()
 
     def do_POST(self):
         """Generate IEEE document - supports both HTML preview and DOCX download"""
@@ -63,10 +74,19 @@ class handler(BaseHTTPRequestHandler):
             preview_html = preview_html.replace('<body>', f'<body>{preview_note}', 1)
             print("✅ HTML preview generated with pixel-perfect formatting", file=sys.stderr)
             
-            # Send success response
+            # Send success response with proper CORS
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
-            self.send_header('Access-Control-Allow-Origin', '*')
+            
+            # Use CORS utilities for proper origin handling
+            try:
+                from cors_utils import set_cors_headers
+                origin = self.headers.get('Origin')
+                set_cors_headers(self, origin)
+            except ImportError:
+                # Fallback CORS
+                self.send_header('Access-Control-Allow-Origin', 'https://format-a.vercel.app')
+            
             self.end_headers()
             
             response = {
@@ -116,14 +136,19 @@ class handler(BaseHTTPRequestHandler):
             # Convert to base64 for JSON response
             pdf_base64 = base64.b64encode(pdf_bytes).decode('utf-8')
             
-            # Send success response with CORS headers
+            # Send success response with proper CORS
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
-            # Use environment-aware CORS
-            if os.getenv('NODE_ENV') == 'development':
-                self.send_header('Access-Control-Allow-Origin', '*')
-            else:
+            
+            # Use CORS utilities for proper origin handling
+            try:
+                from cors_utils import set_cors_headers
+                origin = self.headers.get('Origin')
+                set_cors_headers(self, origin)
+            except ImportError:
+                # Fallback CORS
                 self.send_header('Access-Control-Allow-Origin', 'https://format-a.vercel.app')
+            
             self.end_headers()
             
             response = {
@@ -157,13 +182,19 @@ class handler(BaseHTTPRequestHandler):
             # Convert to base64 for JSON response
             docx_base64 = base64.b64encode(docx_bytes).decode('utf-8')
             
-            # Send success response with environment-aware CORS
+            # Send success response with proper CORS
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
-            if os.getenv('NODE_ENV') == 'development':
-                self.send_header('Access-Control-Allow-Origin', '*')
-            else:
+            
+            # Use CORS utilities for proper origin handling
+            try:
+                from cors_utils import set_cors_headers
+                origin = self.headers.get('Origin')
+                set_cors_headers(self, origin)
+            except ImportError:
+                # Fallback CORS
                 self.send_header('Access-Control-Allow-Origin', 'https://format-a.vercel.app')
+            
             self.end_headers()
             
             response = {
@@ -183,7 +214,16 @@ class handler(BaseHTTPRequestHandler):
         """Send error response with CORS headers"""
         self.send_response(status_code)
         self.send_header('Content-Type', 'application/json')
-        self.send_header('Access-Control-Allow-Origin', '*')
+        
+        # Use CORS utilities for proper origin handling
+        try:
+            from cors_utils import set_cors_headers
+            origin = self.headers.get('Origin')
+            set_cors_headers(self, origin)
+        except ImportError:
+            # Fallback CORS
+            self.send_header('Access-Control-Allow-Origin', 'https://format-a.vercel.app')
+        
         self.end_headers()
         
         response = {
