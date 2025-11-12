@@ -74,23 +74,38 @@ class handler(BaseHTTPRequestHandler):
                 self.handle_docx_download(document_data)
                 return
             
-            # Default: Generate HTML preview using unified rendering system
-            from ieee_generator_fixed import build_document_model, render_to_html
+            # Generate preview using Word→PDF conversion for consistency
+            print("🌐 Generating preview using Word→PDF conversion for exact format matching...", file=sys.stderr)
             
-            print("🌐 Generating HTML preview using unified rendering system...", file=sys.stderr)
-            model = build_document_model(document_data)
-            preview_html = render_to_html(model)
+            # Step 1: Generate DOCX document (same as PDF generation)
+            print("📄 Step 1: Generating DOCX document for preview...", file=sys.stderr)
+            docx_bytes = generate_ieee_document(document_data)
             
-            # Add preview note for live preview
-            preview_note = '''
-    <div style="background: #e8f4fd; border: 1px solid #bee5eb; padding: 12px; margin: 20px 0; font-size: 9pt; color: #0c5460; text-align: center; border-radius: 4px;">
-        📄 IEEE Live Preview - This is exactly what your PDF will look like
-    </div>
-    '''
-            preview_html = preview_html.replace('<body>', f'<body>{preview_note}', 1)
-            print("✅ HTML preview generated with pixel-perfect formatting", file=sys.stderr)
+            if not docx_bytes or len(docx_bytes) == 0:
+                raise Exception("Generated DOCX document is empty")
             
-            # Send success response with strict CORS
+            print(f"✅ DOCX generated successfully for preview (size: {len(docx_bytes)} bytes)", file=sys.stderr)
+            
+            # Step 2: Convert DOCX to PDF for preview (same as download)
+            print("🔄 Step 2: Converting DOCX to PDF for preview...", file=sys.stderr)
+            
+            # Import the serverless-compatible converter
+            sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+            from docx_to_pdf_converter_fixed import convert_docx_to_pdf_direct
+            
+            # Convert DOCX to PDF using direct conversion (preserves all Word formatting)
+            pdf_bytes = convert_docx_to_pdf_direct(docx_bytes)
+            
+            if not pdf_bytes or len(pdf_bytes) == 0:
+                raise Exception("Direct Word→PDF conversion failed for preview")
+            
+            print(f"✅ PDF preview generated via Word→PDF conversion (size: {len(pdf_bytes)} bytes)", file=sys.stderr)
+            
+            # Convert to base64 for response
+            import base64
+            pdf_base64 = base64.b64encode(pdf_bytes).decode('utf-8')
+            
+            # Send success response with PDF data (not HTML)
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
             self.send_cors_headers()
@@ -98,9 +113,12 @@ class handler(BaseHTTPRequestHandler):
             
             response = {
                 'success': True,
-                'preview_html': preview_html,
-                'generator': 'ieee_generator_fixed.py',
-                'message': 'IEEE preview generated successfully'
+                'file_data': pdf_base64,
+                'file_type': 'application/pdf',
+                'file_size': len(pdf_bytes),
+                'message': 'PDF preview generated successfully via Word→PDF conversion',
+                'conversion_method': 'word_to_pdf_preview',
+                'generator': 'ieee_generator_fixed.py'
             }
             
             self.wfile.write(json.dumps(response).encode('utf-8'))
