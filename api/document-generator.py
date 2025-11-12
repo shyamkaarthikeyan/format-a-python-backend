@@ -86,12 +86,12 @@ class handler(BaseHTTPRequestHandler):
             
             print(f"✅ DOCX generated for preview (size: {len(docx_bytes)} bytes)", file=sys.stderr)
             
-            # Step 2: Convert DOCX to PDF using PDFKit
+            # Step 2: Convert DOCX to PDF using direct converter
             print("📄 Step 2: Converting DOCX to PDF for preview...", file=sys.stderr)
             
-            # Import the PDFKit-based DOCX to PDF converter
+            # Import the direct DOCX to PDF converter
             sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-            from docx_to_pdf_converter import convert_docx_to_pdf_direct
+            from docx_to_pdf_converter_direct import convert_docx_to_pdf_direct
             
             # Convert DOCX to PDF
             pdf_bytes = convert_docx_to_pdf_direct(docx_bytes)
@@ -142,12 +142,12 @@ class handler(BaseHTTPRequestHandler):
             
             print(f"✅ DOCX generated (size: {len(docx_bytes)} bytes)", file=sys.stderr)
             
-            # Step 2: Convert DOCX to PDF using PDFKit
-            print("📄 Step 2: Converting DOCX to PDF using PDFKit...", file=sys.stderr)
+            # Step 2: Convert DOCX to PDF using direct converter
+            print("📄 Step 2: Converting DOCX to PDF using direct converter...", file=sys.stderr)
             
-            # Import the PDFKit-based DOCX to PDF converter
+            # Import the direct DOCX to PDF converter
             sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-            from docx_to_pdf_converter import convert_docx_to_pdf_direct
+            from docx_to_pdf_converter_direct import convert_docx_to_pdf_direct
             
             # Convert DOCX to PDF
             pdf_bytes = convert_docx_to_pdf_direct(docx_bytes)
@@ -188,9 +188,9 @@ class handler(BaseHTTPRequestHandler):
         try:
             import base64
             
-            # Import the PDFKit-based DOCX to PDF converter
+            # Import the direct DOCX to PDF converter
             sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-            from docx_to_pdf_converter import convert_docx_to_pdf_direct
+            from docx_to_pdf_converter_direct import convert_docx_to_pdf_direct
             
             print("🎯 Starting direct Word→PDF conversion...", file=sys.stderr)
             

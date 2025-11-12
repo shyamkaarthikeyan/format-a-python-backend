@@ -70,26 +70,120 @@ class IEEE2ColumnPDFConverter {
 
     async parseDocxContent(docxBuffer) {
         try {
-            // For now, we'll create a simple parser
-            // In a full implementation, you'd parse the actual DOCX structure
-            return {
-                title: "IEEE Document",
-                authors: ["Author Name"],
-                abstract: "This is the abstract section of the IEEE document.",
-                sections: [
-                    {
-                        heading: "I. INTRODUCTION",
-                        content: "This is the introduction section with detailed content that will flow across two columns in proper IEEE format."
-                    },
-                    {
-                        heading: "II. METHODOLOGY", 
-                        content: "This section describes the methodology used in the research with proper formatting and layout."
-                    }
-                ],
+            console.log('Parsing actual DOCX content...');
+            const mammoth = require('mammoth');
+            
+            // Extract text and HTML from DOCX buffer
+            const textResult = await mammoth.extractRawText({ buffer: docxBuffer });
+            const htmlResult = await mammoth.convertToHtml({ buffer: docxBuffer });
+            
+            const fullText = textResult.value;
+            const htmlContent = htmlResult.value;
+            
+            console.log('Extracted text length:', fullText.length);
+            console.log('HTML content length:', htmlContent.length);
+            
+            // Parse the text into structured content
+            const lines = fullText.split('\n').map(line => line.trim()).filter(line => line);
+            
+            const content = {
+                title: "",
+                authors: [],
+                abstract: "",
+                sections: [],
                 tables: [],
-                figures: []
+                figures: [],
+                rawText: fullText,
+                htmlContent: htmlContent
             };
+            
+            if (lines.length === 0) {
+                console.warn('No text content found in DOCX');
+                return content;
+            }
+            
+            // Find title (usually the first significant line)
+            content.title = lines[0] || "IEEE Document";
+            
+            let currentSection = null;
+            let inAbstract = false;
+            let abstractStarted = false;
+            
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i];
+                
+                // Skip empty lines
+                if (!line) continue;
+                
+                // Detect abstract section
+                if (line.toLowerCase().includes('abstract') && !abstractStarted) {
+                    inAbstract = true;
+                    abstractStarted = true;
+                    // If the abstract is on the same line as "Abstract"
+                    const abstractText = line.replace(/abstract[—\-:]/i, '').trim();
+                    if (abstractText) {
+                        content.abstract = abstractText + ' ';
+                    }
+                    continue;
+                }
+                
+                // Continue collecting abstract text
+                if (inAbstract) {
+                    // Stop abstract when we hit section headings or keywords
+                    if (line.match(/^[IVX]+\.|^\d+\.|keywords|introduction/i)) {
+                        inAbstract = false;
+                    } else {
+                        content.abstract += line + ' ';
+                        continue;
+                    }
+                }
+                
+                // Detect section headings (Roman numerals, numbers, or common headings)
+                if (line.match(/^[IVX]+\.|^\d+\.|^(introduction|methodology|results|conclusion|references)/i)) {
+                    // Save previous section
+                    if (currentSection) {
+                        content.sections.push(currentSection);
+                    }
+                    
+                    // Start new section
+                    currentSection = {
+                        heading: line,
+                        content: ""
+                    };
+                } else if (currentSection) {
+                    // Add content to current section
+                    currentSection.content += line + ' ';
+                } else if (!inAbstract && i > 0) {
+                    // Content before first section (might be authors, etc.)
+                    if (content.authors.length === 0 && line.length < 100) {
+                        content.authors.push(line);
+                    }
+                }
+            }
+            
+            // Add the last section
+            if (currentSection) {
+                content.sections.push(currentSection);
+            }
+            
+            // Clean up content
+            content.abstract = content.abstract.trim();
+            content.sections.forEach(section => {
+                section.content = section.content.trim();
+            });
+            
+            console.log('Parsed DOCX structure:', {
+                title: content.title.substring(0, 50) + '...',
+                authors: content.authors.length,
+                abstractLength: content.abstract.length,
+                sectionsCount: content.sections.length,
+                sections: content.sections.map(s => s.heading)
+            });
+            
+            return content;
+            
         } catch (error) {
+            console.error('DOCX parsing error:', error);
             throw new Error(`DOCX parsing failed: ${error.message}`);
         }
     }

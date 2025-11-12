@@ -1,5 +1,11 @@
 # Web framework
 flask==2.3.3
 
+# Document processing
+python-docx==0.8.11
+
+# PDF generation with 2-column layout
+reportlab==4.0.4
+
 # Other dependencies
 requests==2.31.0
