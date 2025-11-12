@@ -63,8 +63,14 @@ class handler(BaseHTTPRequestHandler):
             post_data = self.rfile.read(content_length)
             document_data = json.loads(post_data.decode('utf-8'))
             
+            # Debug logging
+            format_value = document_data.get('format')
+            action_value = document_data.get('action')
+            print(f"🔍 Request format: '{format_value}', action: '{action_value}'", file=sys.stderr)
+            
             # Check if this is a DOCX→PDF conversion request (no title validation needed)
             if document_data.get('format') == 'docx-to-pdf':
+                print("📄 Handling DOCX→PDF conversion request", file=sys.stderr)
                 self.handle_docx_to_pdf_conversion(document_data)
                 return
             
@@ -73,8 +79,15 @@ class handler(BaseHTTPRequestHandler):
                 self.send_error_response(400, 'Title is required')
                 return
             
+            # Check if this is a PDF request (generate DOCX then convert to PDF)
+            if document_data.get('format') == 'pdf':
+                print("🎯 Handling PDF generation request", file=sys.stderr)
+                self.handle_pdf_generation(document_data)
+                return
+            
             # Check if this is a DOCX download request
             if document_data.get('format') == 'docx' and document_data.get('action') == 'download':
+                print("📄 Handling DOCX download request", file=sys.stderr)
                 self.handle_docx_download(document_data)
                 return
             
@@ -119,6 +132,70 @@ class handler(BaseHTTPRequestHandler):
         except Exception as e:
             self.send_error_response(500, f'Document generation failed: {str(e)}')
     
+    def handle_pdf_generation(self, document_data):
+        """Handle PDF generation requests - Generate DOCX then convert to PDF"""
+        try:
+            import base64
+            
+            print("🎯 Starting PDF generation (DOCX→PDF pipeline)...", file=sys.stderr)
+            
+            # Step 1: Generate DOCX document
+            print("📄 Step 1: Generating DOCX document...", file=sys.stderr)
+            docx_bytes = generate_ieee_document(document_data)
+            
+            if not docx_bytes or len(docx_bytes) == 0:
+                raise Exception("Generated DOCX document is empty")
+            
+            print(f"✅ DOCX generated successfully (size: {len(docx_bytes)} bytes)", file=sys.stderr)
+            
+            # Step 2: Convert DOCX to PDF
+            print("🔄 Step 2: Converting DOCX to PDF...", file=sys.stderr)
+            
+            # Import the DOCX to PDF converter
+            sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+            from docx_to_pdf_converter import convert_docx_to_pdf
+            
+            # Convert DOCX to PDF using ReportLab
+            pdf_bytes = convert_docx_to_pdf(docx_bytes)
+            
+            if not pdf_bytes or len(pdf_bytes) == 0:
+                raise Exception("DOCX→PDF conversion failed - empty result")
+            
+            print(f"✅ PDF generation complete (size: {len(pdf_bytes)} bytes)", file=sys.stderr)
+            
+            # Convert to base64 for JSON response
+            pdf_base64 = base64.b64encode(pdf_bytes).decode('utf-8')
+            
+            # Send success response with proper CORS
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            
+            # Simple, robust CORS handling
+            origin = self.headers.get('Origin')
+            if origin == 'https://format-a.vercel.app':
+                self.send_header('Access-Control-Allow-Origin', origin)
+            else:
+                self.send_header('Access-Control-Allow-Origin', 'https://format-a.vercel.app')
+            
+            self.end_headers()
+            
+            response = {
+                'success': True,
+                'file_data': pdf_base64,
+                'file_type': 'application/pdf',
+                'file_size': len(pdf_bytes),
+                'message': 'PDF generated successfully via DOCX→PDF pipeline',
+                'conversion_method': 'docx_to_pdf_reportlab',
+                'requested_format': 'pdf',
+                'actual_format': 'pdf'
+            }
+            
+            self.wfile.write(json.dumps(response).encode('utf-8'))
+            
+        except Exception as e:
+            print(f"❌ PDF generation failed: {e}", file=sys.stderr)
+            self.send_error_response(500, f'PDF generation failed: {str(e)}')
+
     def handle_docx_to_pdf_conversion(self, request_data):
         """Handle DOCX to PDF conversion requests - Word→PDF conversion ONLY"""
         try:

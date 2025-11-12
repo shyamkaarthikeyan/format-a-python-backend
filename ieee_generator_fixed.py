@@ -1621,8 +1621,24 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
                     space_after=Pt(12),
                 )
 
+    # Frontend compatibility: Handle content array format
+    if not content_blocks and section_data.get("content") and isinstance(section_data["content"], list):
+        # Convert frontend content array to content blocks
+        for content_item in section_data["content"]:
+            if isinstance(content_item, dict) and content_item.get("type") == "text" and content_item.get("content"):
+                space_before = IEEE_CONFIG["line_spacing"] if is_first_section else Pt(3)
+                add_justified_paragraph(
+                    doc,
+                    sanitize_text(content_item["content"]),
+                    indent_left=IEEE_CONFIG["column_indent"],
+                    indent_right=IEEE_CONFIG["column_indent"],
+                    space_before=space_before,
+                    space_after=Pt(12),
+                )
+                is_first_section = False  # Only first paragraph gets special spacing
+
     # Legacy support for old content field - EXACT same as test.py
-    if not content_blocks and section_data.get("content"):
+    elif not content_blocks and section_data.get("content") and isinstance(section_data["content"], str):
         space_before = IEEE_CONFIG["line_spacing"] if is_first_section else Pt(3)
         add_justified_paragraph(
             doc,
@@ -2533,6 +2549,30 @@ def build_document_model(form_data):
                     "font_style": "italic"
                 }
                 section_data["content_blocks"].append(equation_data)
+        
+        # Frontend compatibility: Handle content array format (same as DOCX generation)
+        if not content_blocks and section.get("content") and isinstance(section["content"], list):
+            for content_item in section["content"]:
+                if isinstance(content_item, dict) and content_item.get("type") == "text" and content_item.get("content"):
+                    section_data["content_blocks"].append({
+                        "type": "paragraph",
+                        "text": sanitize_text(content_item["content"]),
+                        "font_size": "10pt",
+                        "text_align": "justify",
+                        "margin_bottom": "12pt",
+                        "line_height": "12pt"
+                    })
+        
+        # Legacy support: Handle simple content string
+        elif not content_blocks and section.get("content") and isinstance(section["content"], str):
+            section_data["content_blocks"].append({
+                "type": "paragraph",
+                "text": sanitize_text(section["content"]),
+                "font_size": "10pt",
+                "text_align": "justify",
+                "margin_bottom": "12pt",
+                "line_height": "12pt"
+            })
         
         model["sections"].append(section_data)
     
