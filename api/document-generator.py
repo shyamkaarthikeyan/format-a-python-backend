@@ -1,4 +1,4 @@
-import json
+Function Runtimes must have a valid version, for example `now-php@1.0.0`.import json
 import sys
 import os
 from http.server import BaseHTTPRequestHandler
@@ -121,12 +121,12 @@ class handler(BaseHTTPRequestHandler):
             
             print(f"✅ DOCX generated successfully (size: {len(docx_bytes)} bytes)", file=sys.stderr)
             
-            # Step 2: Direct Word→PDF conversion using docx2pdf
-            print("🔄 Step 2: Direct Word→PDF conversion using docx2pdf...", file=sys.stderr)
+            # Step 2: Serverless-compatible Word→PDF conversion
+            print("🔄 Step 2: Serverless-compatible Word→PDF conversion...", file=sys.stderr)
             
-            # Import the direct converter
+            # Import the serverless-compatible converter
             sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-            from docx_to_pdf_converter import convert_docx_to_pdf_direct
+            from docx_to_pdf_converter_fixed import convert_docx_to_pdf_direct
             
             # Convert DOCX to PDF using direct conversion (preserves all Word formatting)
             pdf_bytes = convert_docx_to_pdf_direct(docx_bytes)
@@ -167,9 +167,9 @@ class handler(BaseHTTPRequestHandler):
         try:
             import base64
             
-            # Import the direct DOCX to PDF converter
+            # Import the serverless-compatible DOCX to PDF converter
             sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-            from docx_to_pdf_converter import convert_docx_to_pdf_direct
+            from docx_to_pdf_converter_fixed import convert_docx_to_pdf_direct
             
             print("🎯 Starting direct Word→PDF conversion...", file=sys.stderr)
             
