@@ -64,8 +64,8 @@ class handler(BaseHTTPRequestHandler):
             
             # Check if this is a PDF request (generate DOCX then convert to PDF)
             if document_data.get('format') == 'pdf':
-                print("🎯 Handling PDF generation request", file=sys.stderr)
-                self.handle_pdf_generation(document_data)
+                print("🎯 Handling PDF generation request via DOCX→PDF conversion", file=sys.stderr)
+                self.handle_pdf_via_docx_conversion(document_data)
                 return
             
             # Check if this is a DOCX download request
@@ -74,38 +74,38 @@ class handler(BaseHTTPRequestHandler):
                 self.handle_docx_download(document_data)
                 return
             
-            # Generate preview using Word→PDF conversion for consistency
-            print("🌐 Generating preview using Word→PDF conversion for exact format matching...", file=sys.stderr)
+            # Generate preview using DOCX→PDF conversion (consistent formatting)
+            print("🌐 Generating preview using DOCX→PDF conversion for consistent formatting...", file=sys.stderr)
             
-            # Step 1: Generate DOCX document (same as PDF generation)
+            # Step 1: Generate DOCX document
             print("📄 Step 1: Generating DOCX document for preview...", file=sys.stderr)
             docx_bytes = generate_ieee_document(document_data)
             
             if not docx_bytes or len(docx_bytes) == 0:
-                raise Exception("Generated DOCX document is empty")
+                raise Exception("DOCX generation failed for preview")
             
-            print(f"✅ DOCX generated successfully for preview (size: {len(docx_bytes)} bytes)", file=sys.stderr)
+            print(f"✅ DOCX generated for preview (size: {len(docx_bytes)} bytes)", file=sys.stderr)
             
-            # Step 2: Convert DOCX to PDF for preview (same as download)
-            print("🔄 Step 2: Converting DOCX to PDF for preview...", file=sys.stderr)
+            # Step 2: Convert DOCX to PDF using Aspose.Words
+            print("📄 Step 2: Converting DOCX to PDF for preview...", file=sys.stderr)
             
-            # Import the serverless-compatible converter
+            # Import the Aspose.Words-based DOCX to PDF converter
             sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-            from docx_to_pdf_converter_fixed import convert_docx_to_pdf_direct
+            from docx_to_pdf_converter_aspose import convert_docx_to_pdf_direct
             
-            # Convert DOCX to PDF using direct conversion (preserves all Word formatting)
+            # Convert DOCX to PDF
             pdf_bytes = convert_docx_to_pdf_direct(docx_bytes)
             
             if not pdf_bytes or len(pdf_bytes) == 0:
-                raise Exception("Direct Word→PDF conversion failed for preview")
+                raise Exception("DOCX→PDF conversion failed for preview")
             
-            print(f"✅ PDF preview generated via Word→PDF conversion (size: {len(pdf_bytes)} bytes)", file=sys.stderr)
+            print(f"✅ PDF preview generated via DOCX→PDF conversion (size: {len(pdf_bytes)} bytes)", file=sys.stderr)
             
             # Convert to base64 for response
             import base64
             pdf_base64 = base64.b64encode(pdf_bytes).decode('utf-8')
             
-            # Send success response with PDF data (not HTML)
+            # Send success response with PDF data
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
             self.send_cors_headers()
@@ -116,8 +116,8 @@ class handler(BaseHTTPRequestHandler):
                 'file_data': pdf_base64,
                 'file_type': 'application/pdf',
                 'file_size': len(pdf_bytes),
-                'message': 'PDF preview generated successfully via Word→PDF conversion',
-                'conversion_method': 'word_to_pdf_preview',
+                'message': 'PDF preview generated successfully via DOCX→PDF conversion',
+                'conversion_method': 'docx_to_pdf_conversion',
                 'generator': 'ieee_generator_fixed.py'
             }
             
@@ -126,36 +126,36 @@ class handler(BaseHTTPRequestHandler):
         except Exception as e:
             self.send_error_response(500, f'Document generation failed: {str(e)}')
     
-    def handle_pdf_generation(self, document_data):
-        """Handle PDF generation requests - Direct Word→PDF conversion ONLY"""
+    def handle_pdf_via_docx_conversion(self, document_data):
+        """Handle PDF generation requests - Generate DOCX first, then convert to PDF"""
         try:
             import base64
             
-            print("🎯 Starting direct Word→PDF generation...", file=sys.stderr)
+            print("🎯 Starting PDF generation via DOCX→PDF conversion...", file=sys.stderr)
             
             # Step 1: Generate DOCX document
             print("📄 Step 1: Generating DOCX document...", file=sys.stderr)
             docx_bytes = generate_ieee_document(document_data)
             
             if not docx_bytes or len(docx_bytes) == 0:
-                raise Exception("Generated DOCX document is empty")
+                raise Exception("DOCX generation failed - empty result")
             
-            print(f"✅ DOCX generated successfully (size: {len(docx_bytes)} bytes)", file=sys.stderr)
+            print(f"✅ DOCX generated (size: {len(docx_bytes)} bytes)", file=sys.stderr)
             
-            # Step 2: Serverless-compatible Word→PDF conversion
-            print("🔄 Step 2: Serverless-compatible Word→PDF conversion...", file=sys.stderr)
+            # Step 2: Convert DOCX to PDF using Aspose.Words
+            print("📄 Step 2: Converting DOCX to PDF using Aspose.Words...", file=sys.stderr)
             
-            # Import the serverless-compatible converter
+            # Import the Aspose.Words-based DOCX to PDF converter
             sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-            from docx_to_pdf_converter_fixed import convert_docx_to_pdf_direct
+            from docx_to_pdf_converter_aspose import convert_docx_to_pdf_direct
             
-            # Convert DOCX to PDF using direct conversion (preserves all Word formatting)
+            # Convert DOCX to PDF
             pdf_bytes = convert_docx_to_pdf_direct(docx_bytes)
             
             if not pdf_bytes or len(pdf_bytes) == 0:
-                raise Exception("Direct Word→PDF conversion failed - empty result")
+                raise Exception("DOCX→PDF conversion failed - empty result")
             
-            print(f"✅ Direct PDF generation complete (size: {len(pdf_bytes)} bytes)", file=sys.stderr)
+            print(f"✅ PDF generated via DOCX→PDF conversion (size: {len(pdf_bytes)} bytes)", file=sys.stderr)
             
             # Convert to base64 for JSON response
             pdf_base64 = base64.b64encode(pdf_bytes).decode('utf-8')
@@ -171,8 +171,8 @@ class handler(BaseHTTPRequestHandler):
                 'file_data': pdf_base64,
                 'file_type': 'application/pdf',
                 'file_size': len(pdf_bytes),
-                'message': 'PDF generated successfully via direct Word→PDF conversion',
-                'conversion_method': 'direct_docx2pdf',
+                'message': 'PDF generated successfully via DOCX→PDF conversion',
+                'conversion_method': 'docx_to_pdf_conversion',
                 'requested_format': 'pdf',
                 'actual_format': 'pdf'
             }
@@ -180,17 +180,17 @@ class handler(BaseHTTPRequestHandler):
             self.wfile.write(json.dumps(response).encode('utf-8'))
             
         except Exception as e:
-            print(f"❌ Direct PDF generation failed: {e}", file=sys.stderr)
-            self.send_error_response(500, f'Direct PDF generation failed: {str(e)}')
+            print(f"❌ PDF generation via DOCX→PDF conversion failed: {e}", file=sys.stderr)
+            self.send_error_response(500, f'PDF generation via DOCX→PDF conversion failed: {str(e)}')
 
     def handle_docx_to_pdf_conversion(self, request_data):
         """Handle DOCX to PDF conversion requests - Direct Word→PDF conversion ONLY"""
         try:
             import base64
             
-            # Import the serverless-compatible DOCX to PDF converter
+            # Import the Aspose.Words-based DOCX to PDF converter
             sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-            from docx_to_pdf_converter_fixed import convert_docx_to_pdf_direct
+            from docx_to_pdf_converter_aspose import convert_docx_to_pdf_direct
             
             print("🎯 Starting direct Word→PDF conversion...", file=sys.stderr)
             
