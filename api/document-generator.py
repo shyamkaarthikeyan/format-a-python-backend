@@ -8,8 +8,15 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.join(current_dir, '..')
 sys.path.insert(0, parent_dir)
 
-# Import only from the correct ieee_generator_fixed.py
-from ieee_generator_fixed import generate_ieee_document
+# Try to import ieee_generator_fixed with error handling
+try:
+    from ieee_generator_fixed import generate_ieee_document
+    print("✅ Successfully imported ieee_generator_fixed", file=sys.stderr)
+except ImportError as e:
+    print(f"❌ Failed to import ieee_generator_fixed: {e}", file=sys.stderr)
+    # Create a dummy function to prevent crashes
+    def generate_ieee_document(data):
+        raise Exception("IEEE generator not available")
 
 class handler(BaseHTTPRequestHandler):
     def do_OPTIONS(self):
