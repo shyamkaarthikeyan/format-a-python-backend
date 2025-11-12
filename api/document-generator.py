@@ -63,14 +63,14 @@ class handler(BaseHTTPRequestHandler):
             post_data = self.rfile.read(content_length)
             document_data = json.loads(post_data.decode('utf-8'))
             
-            # Validate required field
-            if not document_data.get('title'):
-                self.send_error_response(400, 'Title is required')
-                return
-            
-            # Check if this is a DOCX→PDF conversion request
+            # Check if this is a DOCX→PDF conversion request (no title validation needed)
             if document_data.get('format') == 'docx-to-pdf':
                 self.handle_docx_to_pdf_conversion(document_data)
+                return
+            
+            # Validate required field for document generation
+            if not document_data.get('title'):
+                self.send_error_response(400, 'Title is required')
                 return
             
             # Check if this is a DOCX download request
