@@ -50,7 +50,7 @@ def add_image_with_proper_layout(doc, image_data, width, caption_text="", figure
         image_stream = BytesIO(image_bytes)
         
         # Ensure width fits within 2-column layout constraints
-        max_column_width = Inches(3.0)  # Safe width for 2-column layout
+        max_column_width = Inches(3.2)  # Increased from 3.0 for better image visibility
         if width > max_column_width:
             width = max_column_width
         
@@ -101,15 +101,23 @@ def add_image_with_proper_layout(doc, image_data, width, caption_text="", figure
                     cx = int(width.emu)  # Convert to EMUs
                     ext.set('cx', str(cx))
         
-        # Scale down if too tall to prevent page overflow
-        if picture.height > IEEE_CONFIG["max_figure_height"]:
-            scale_factor = IEEE_CONFIG["max_figure_height"] / picture.height
+        # Scale down if too tall to prevent page overflow - IMPROVED aspect ratio handling
+        max_height = Inches(3.5)  # Reduced from 4.0 for better 2-column fit
+        if picture.height > max_height:
+            scale_factor = max_height / picture.height
+            new_width = width * scale_factor
+            
+            # Ensure scaled width still fits
+            if new_width > max_column_width:
+                new_width = max_column_width
+                scale_factor = new_width / width
+            
             run.clear()
             image_stream.seek(0)  # Reset stream position
             picture = run.add_picture(
                 image_stream,
-                width=width * scale_factor,
-                height=IEEE_CONFIG["max_figure_height"],
+                width=new_width,
+                height=max_height if (new_width <= max_column_width) else (picture.height * (max_column_width / width)),
             )
             
             # Reapply visibility settings after scaling
@@ -117,6 +125,7 @@ def add_image_with_proper_layout(doc, image_data, width, caption_text="", figure
             docPr = inline.docPr
             docPr.set('name', f'Image_{figure_number}_scaled' if figure_number else 'Image_scaled')
             docPr.set('descr', f'{caption_text} (scaled)' if caption_text else 'Figure (scaled)')
+            print(f"📐 Image scaled to maintain aspect ratio: width={new_width}, height={max_height}", file=sys.stderr)
         
         # Add caption if provided
         if caption_text:
@@ -175,16 +184,29 @@ IEEE_CONFIG = {
     "spacing_keywords_after": 240,  # 12pt after keywords
     "spacing_section_before": 240,  # 12pt before section headings
     "spacing_section_after": 0,  # 0pt after section headings
-    # Figure specifications
+    # Figure specifications - 5 SIZE OPTIONS (all fit within 2-column layout)
     "figure_max_width_twips": 4770,  # Max 3.3125" width (column width)
     "figure_spacing": 120,  # 6pt before/after figures
     "figure_sizes": {
-        "Very Small": Inches(1.5),  # 1.5" width
-        "Small": Inches(2.0),  # 2.0" width
-        "Medium": Inches(2.5),  # 2.5" width
-        "Large": Inches(3.3125),  # Full column width
+        "extra-small": Inches(1.0),   # 1.0" - Minimum size for visibility
+        "small": Inches(1.5),          # 1.5" - Small but clear
+        "medium": Inches(2.0),         # 2.0" - Balanced size
+        "large": Inches(2.5),          # 2.5" - Large and prominent
+        "extra-large": Inches(3.0),    # 3.0" - Maximum size (fits in column)
     },
-    "max_figure_height": Inches(4.0),  # Max figure height
+    "max_figure_height": Inches(3.5),  # Max figure height (reduced for 2-column fit)
+    "min_figure_width": Inches(1.0),   # Minimum width for visibility
+    "max_figure_width": Inches(3.0),   # Maximum width (fits in column with margins)
+    # Table specifications - 5 SIZE OPTIONS (all fit within 2-column layout)
+    "table_sizes": {
+        "extra-small": Inches(1.5),    # 1.5" - Compact table
+        "small": Inches(2.0),          # 2.0" - Small table
+        "medium": Inches(2.5),         # 2.5" - Standard table
+        "large": Inches(2.8),          # 2.8" - Large table
+        "extra-large": Inches(3.0),    # 3.0" - Maximum table width (fits in column)
+    },
+    "min_table_width": Inches(1.5),    # Minimum table width
+    "max_table_width": Inches(3.0),    # Maximum table width (fits in column)
     # Reference specifications
     "reference_hanging_indent": 360,  # 0.25" hanging indent
 }
@@ -795,9 +817,29 @@ def add_ieee_table(doc, table_data, section_idx, table_count):
             for child in list(tblPr):
                 tblPr.remove(child)
             
+            # Get table size from data - 5 SIZE OPTIONS (all fit within 2-column layout)
+            table_size = table_data.get("size", "medium")
+            size_mapping = IEEE_CONFIG["table_sizes"]
+            
+            # Get table width from size mapping, default to medium
+            table_width = size_mapping.get(table_size, size_mapping.get("medium", Inches(2.5)))
+            
+            # Ensure width is within safe bounds for 2-column layout
+            min_width = IEEE_CONFIG["min_table_width"]
+            max_width = IEEE_CONFIG["max_table_width"]
+            if table_width < min_width:
+                table_width = min_width
+            if table_width > max_width:
+                table_width = max_width
+            
+            # Convert to twips for OpenXML
+            table_width_twips = int(table_width * 1440)  # 1440 twips per inch
+            
+            print(f"📏 Table size '{table_size}' mapped to width: {table_width} ({table_width_twips} twips)", file=sys.stderr)
+            
             # Set table width to fit within single column (2-column layout compatible)
             tblW = OxmlElement('w:tblW')
-            tblW.set(qn('w:w'), '4770')  # Single column width in twips (3.3125" * 1440 twips/inch)
+            tblW.set(qn('w:w'), str(table_width_twips))  # Use calculated width based on size
             tblW.set(qn('w:type'), 'dxa')  # Use exact measurements
             tblPr.append(tblW)
             
@@ -823,10 +865,12 @@ def add_ieee_table(doc, table_data, section_idx, table_count):
             # STEP 6: SET COMPREHENSIVE CELL FORMATTING FOR MAXIMUM VISIBILITY
             print("🔧 Applying maximum visibility cell formatting...", file=sys.stderr)
             
-            # Calculate column width for 2-column layout compatibility
-            col_width_twips = 4770 // num_cols  # Distribute single column width equally
+            # Calculate column width based on table size for 2-column layout compatibility
+            col_width_twips = table_width_twips // num_cols  # Distribute table width equally
             min_width_twips = 720  # Minimum 0.5 inch per column for 2-column layout
             final_col_width = max(min_width_twips, col_width_twips)
+            
+            print(f"📏 Column width: {final_col_width} twips ({final_col_width/1440:.2f} inches)", file=sys.stderr)
             
             for row in table.rows:
                 for cell in row.cells:
@@ -1399,15 +1443,20 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
 
             print(f"Processing image block in section {section_idx}, image {img_count}", file=sys.stderr)
 
-            # Get image size and caption - CONSERVATIVE SIZING TO PREVENT OVERLAP
+            # Get image size and caption - 5 SIZE OPTIONS (all fit within 2-column layout)
             size = block.get("size", "medium")
-            size_mapping = {
-                "very-small": Inches(1.0),  # Very conservative for 2-column
-                "small": Inches(1.4),       # Conservative for 2-column
-                "medium": Inches(1.8),      # Conservative for 2-column
-                "large": Inches(2.2),       # Max conservative for 2-column
-            }
-            width = size_mapping.get(size, Inches(1.8))
+            size_mapping = IEEE_CONFIG["figure_sizes"]
+            
+            # Get width from size mapping, default to medium
+            width = size_mapping.get(size, size_mapping.get("medium", Inches(2.0)))
+            
+            # Ensure width is within safe bounds for 2-column layout
+            min_width = IEEE_CONFIG["min_figure_width"]
+            max_width = IEEE_CONFIG["max_figure_width"]
+            if width < min_width:
+                width = min_width
+            if width > max_width:
+                width = max_width
             
             print(f"📏 Image size '{size}' mapped to width: {width}", file=sys.stderr)
             caption_text = sanitize_text(block['caption'])
@@ -1488,8 +1537,9 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
                 # Add image with proper sizing for 2-column layout
                 run = img_para.add_run()
                 
-                # Ensure image fits comfortably within column width with generous margins
-                max_col_width = Inches(2.2)  # Much smaller to prevent overlap issues
+                # Ensure image fits comfortably within column width (already validated above)
+                max_col_width = IEEE_CONFIG["max_figure_width"]  # 3.0" - fits in column
+                # Width already validated, but double-check for safety
                 if width > max_col_width:
                     width = max_col_width
                 
@@ -1519,15 +1569,24 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
                             off.set('x', '0')
                             off.set('y', '0')
                 
-                # Scale down if too tall
-                if picture.height > IEEE_CONFIG["max_figure_height"]:
-                    scale_factor = IEEE_CONFIG["max_figure_height"] / picture.height
+                # Scale down if too tall - IMPROVED to maintain aspect ratio and prevent clipping
+                max_height = Inches(3.5)  # Reduced from 4.0 to fit better in 2-column
+                if picture.height > max_height:
+                    # Calculate scale factor to fit within max height
+                    scale_factor = max_height / picture.height
+                    new_width = width * scale_factor
+                    
+                    # Ensure scaled width still fits in column
+                    if new_width > max_col_width:
+                        new_width = max_col_width
+                        scale_factor = new_width / width
+                    
                     run.clear()
                     image_stream.seek(0)
                     picture = run.add_picture(
                         image_stream,
-                        width=width * scale_factor,
-                        height=IEEE_CONFIG["max_figure_height"],
+                        width=new_width,
+                        height=max_height if (width * scale_factor <= max_col_width) else (picture.height * (max_col_width / width)),
                     )
                     
                     # Reapply properties after scaling
@@ -1535,6 +1594,8 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
                     docPr = inline.docPr
                     docPr.set('name', f'Figure_{section_idx}_{img_count}_scaled')
                     docPr.set('descr', f'Section Figure: {caption_text} (scaled)')
+                    
+                    print(f"📐 Image scaled: original height exceeded {max_height}, scaled to maintain aspect ratio", file=sys.stderr)
 
                 # Add figure caption in separate paragraph
                 caption_para = doc.add_paragraph()
