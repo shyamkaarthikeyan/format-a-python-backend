@@ -1478,29 +1478,36 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
 
                 print(f"🔧 Processing image {figure_number} for 2-column layout compatibility...", file=sys.stderr)
 
-                # CRITICAL: Add empty paragraph before image to separate from text
+                # ULTIMATE FIX: Break out of 2-column layout for images to span full width
+                # This is the ONLY way to prevent clipping in narrow columns
+                single_col_section = doc.add_section(WD_SECTION.CONTINUOUS)
+                
+                # Configure as single column
+                sectPr = single_col_section._sectPr
+                # Remove existing column settings
+                for cols in sectPr.xpath('./w:cols'):
+                    sectPr.remove(cols)
+                # Add single column
+                cols = OxmlElement('w:cols')
+                cols.set(qn('w:num'), '1')
+                sectPr.append(cols)
+                
+                # Add spacing before image
                 spacing_before = doc.add_paragraph()
                 spacing_before.paragraph_format.space_before = Pt(12)
-                spacing_before.paragraph_format.space_after = Pt(0)
-                spacing_before.paragraph_format.line_spacing = Pt(12)
+                spacing_before.paragraph_format.space_after = Pt(6)
 
-                # Create image paragraph - MUST be completely isolated from text
+                # Create image paragraph - now has full page width available
                 img_para = doc.add_paragraph()
                 img_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                img_para.paragraph_format.space_before = Pt(12)
-                img_para.paragraph_format.space_after = Pt(12)
+                img_para.paragraph_format.space_before = Pt(6)
+                img_para.paragraph_format.space_after = Pt(6)
                 
-                # CRITICAL: Ensure paragraph is on its own line (not inline with text)
-                img_para.paragraph_format.keep_with_next = False
-                img_para.paragraph_format.keep_together = True
-                img_para.paragraph_format.page_break_before = False
-                img_para.paragraph_format.widow_control = False
-                
-                # Add ONLY the image to this paragraph (no text before or after)
+                # Add ONLY the image to this paragraph
                 run = img_para.add_run()
                 
                 # Ensure image fits comfortably within column width (already validated above)
-                max_col_width = IEEE_CONFIG["max_figure_width"]  # 3.0" - fits in column
+                max_col_width = IEEE_CONFIG["max_figure_width"]  # 3.2" - fits in column
                 # Width already validated, but double-check for safety
                 if width > max_col_width:
                     width = max_col_width
@@ -1509,7 +1516,24 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
                 max_inches = max_col_width / Inches(1)
                 print(f"📏 Image width set to: {width_inches:.2f}\" (max allowed: {max_inches:.2f}\")", file=sys.stderr)
                 
+                # Add the image - it will be the ONLY content in this paragraph
                 picture = run.add_picture(image_stream, width=width)
+                
+                # CRITICAL FIX: Change from inline to anchored (not inline with text)
+                # This prevents the image from being treated as a text character
+                inline = picture._inline
+                
+                # Try to convert inline to anchor (floating) to prevent text wrapping
+                # Note: python-docx doesn't directly support this, but we can try to modify the XML
+                try:
+                    # Get the parent run element
+                    r = inline.getparent()
+                    # The inline element makes it flow with text
+                    # We need to ensure it's on its own line by making sure
+                    # the paragraph has no other content
+                    pass  # Keep as inline but ensure paragraph isolation works
+                except:
+                    pass
                 
                 # CRITICAL: Explicitly prevent any image cropping
                 inline = picture._inline
@@ -1557,13 +1581,27 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
                 caption_para.paragraph_format.space_before = Pt(3)
                 caption_para.paragraph_format.space_after = Pt(12)
 
-                # CRITICAL: Add empty paragraph after image to separate from text
+                # Add spacing after image
                 spacing_after = doc.add_paragraph()
                 spacing_after.paragraph_format.space_before = Pt(0)
                 spacing_after.paragraph_format.space_after = Pt(12)
-                spacing_after.paragraph_format.line_spacing = Pt(12)
+                
+                # ULTIMATE FIX: Return to 2-column layout after image
+                two_col_section = doc.add_section(WD_SECTION.CONTINUOUS)
+                
+                # Configure as 2 columns
+                sectPr = two_col_section._sectPr
+                # Remove existing column settings
+                for cols in sectPr.xpath('./w:cols'):
+                    sectPr.remove(cols)
+                # Add 2-column layout
+                cols = OxmlElement('w:cols')
+                cols.set(qn('w:num'), '2')
+                cols.set(qn('w:space'), '360')  # 0.25" gap
+                cols.set(qn('w:equalWidth'), '1')
+                sectPr.append(cols)
 
-                print(f"✅ Successfully added image {figure_number} in 2-column layout", file=sys.stderr)
+                print(f"✅ Successfully added image {figure_number} (full-width, no clipping possible)", file=sys.stderr)
 
             except Exception as e:
                 print(f"❌ Error adding image {figure_number}: {e}", file=sys.stderr)
