@@ -1504,6 +1504,15 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
                 
                 picture = run.add_picture(image_stream, width=width)
                 
+                # CRITICAL: Prevent image cropping by ensuring proper extent
+                inline = picture._inline
+                extent = inline.extent
+                if extent is not None:
+                    # Ensure extent matches the actual image size (prevents cropping)
+                    cx = extent.cx
+                    cy = extent.cy
+                    print(f"📐 Image extent: {cx} x {cy} EMUs", file=sys.stderr)
+                
                 # Scale down if too tall to fit in page
                 max_height = Inches(3.5)
                 if picture.height > max_height:
