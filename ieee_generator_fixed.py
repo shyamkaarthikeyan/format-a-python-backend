@@ -196,7 +196,7 @@ IEEE_CONFIG = {
     },
     "max_figure_height": Inches(3.5),  # Max figure height (reduced for 2-column fit)
     "min_figure_width": Inches(1.0),   # Minimum width for visibility
-    "max_figure_width": Inches(3.0),   # Maximum width (fits in column with margins)
+    "max_figure_width": Inches(3.2),   # Maximum width (safely fits in 3.3125" column)
     # Table specifications - 5 SIZE OPTIONS (all fit within 2-column layout)
     "table_sizes": {
         "extra-small": Inches(1.5),    # 1.5" - Compact table
@@ -1478,23 +1478,6 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
 
                 print(f"🔧 Processing image {figure_number} for 2-column layout compatibility...", file=sys.stderr)
 
-                # CRITICAL FIX: Break out of 2-column layout for images
-                # Add continuous section break to exit columns
-                single_col_section = doc.add_section(WD_SECTION.CONTINUOUS)
-                single_col_section.start_type = WD_SECTION.CONTINUOUS
-                
-                # Set to single column for image
-                sectPr = single_col_section._sectPr
-                cols = sectPr.xpath('./w:cols')
-                if cols:
-                    for col in cols:
-                        sectPr.remove(col)
-                
-                # Add new single column setting
-                cols_element = OxmlElement('w:cols')
-                cols_element.set(qn('w:num'), '1')  # Single column
-                sectPr.append(cols_element)
-                
                 # Add spacing before image
                 spacing_before = doc.add_paragraph()
                 spacing_before.paragraph_format.space_before = Pt(12)
@@ -1521,14 +1504,32 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
                 
                 picture = run.add_picture(image_stream, width=width)
                 
-                # CRITICAL: Prevent image cropping by ensuring proper extent
+                # CRITICAL: Explicitly prevent any image cropping
                 inline = picture._inline
-                extent = inline.extent
-                if extent is not None:
-                    # Ensure extent matches the actual image size (prevents cropping)
-                    cx = extent.cx
-                    cy = extent.cy
-                    print(f"📐 Image extent: {cx} x {cy} EMUs", file=sys.stderr)
+                graphic = inline.graphic
+                graphicData = graphic.graphicData
+                pic = graphicData.pic
+                
+                # Access the blipFill element which contains crop information
+                blipFill = pic.blipFill
+                if blipFill is not None:
+                    # Check for srcRect (source rectangle/crop) and remove it
+                    srcRect_elements = blipFill.findall('.//{http://schemas.openxmlformats.org/drawingml/2006/main}srcRect')
+                    for srcRect in srcRect_elements:
+                        blipFill.remove(srcRect)
+                    
+                    # Add a new srcRect with no cropping (all values = 0)
+                    from lxml import etree
+                    srcRect = etree.SubElement(blipFill, '{http://schemas.openxmlformats.org/drawingml/2006/main}srcRect')
+                    srcRect.set('l', '0')  # left crop = 0
+                    srcRect.set('t', '0')  # top crop = 0
+                    srcRect.set('r', '0')  # right crop = 0
+                    srcRect.set('b', '0')  # bottom crop = 0
+                
+                # Log dimensions for debugging
+                print(f"📐 Image dimensions: {picture.width} x {picture.height} EMUs", file=sys.stderr)
+                print(f"📐 Image size: {picture.width/914400:.2f}\" x {picture.height/914400:.2f}\"", file=sys.stderr)
+                print(f"✅ Crop prevention applied (srcRect set to 0,0,0,0)", file=sys.stderr)
                 
                 # Scale down if too tall to fit in page
                 max_height = Inches(3.5)
@@ -1553,27 +1554,8 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
                 spacing_after = doc.add_paragraph()
                 spacing_after.paragraph_format.space_before = Pt(0)
                 spacing_after.paragraph_format.space_after = Pt(12)
-                
-                # CRITICAL FIX: Return to 2-column layout after image
-                # Add continuous section break to resume columns
-                two_col_section = doc.add_section(WD_SECTION.CONTINUOUS)
-                two_col_section.start_type = WD_SECTION.CONTINUOUS
-                
-                # Set back to 2 columns
-                sectPr = two_col_section._sectPr
-                cols = sectPr.xpath('./w:cols')
-                if cols:
-                    for col in cols:
-                        sectPr.remove(col)
-                
-                # Add 2-column setting
-                cols_element = OxmlElement('w:cols')
-                cols_element.set(qn('w:num'), '2')  # Two columns
-                cols_element.set(qn('w:space'), '360')  # 0.25" gap
-                cols_element.set(qn('w:equalWidth'), '1')  # Equal width
-                sectPr.append(cols_element)
 
-                print(f"✅ Successfully added image {figure_number} (single-column span to prevent clipping)", file=sys.stderr)
+                print(f"✅ Successfully added image {figure_number} in 2-column layout", file=sys.stderr)
 
             except Exception as e:
                 print(f"❌ Error adding image {figure_number}: {e}", file=sys.stderr)
