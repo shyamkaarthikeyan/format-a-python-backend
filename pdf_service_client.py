@@ -6,6 +6,7 @@ deployed on Railway/Render. It includes retry logic with exponential backoff for
 transient failures and health check functionality to monitor service availability.
 
 Requirements: 2.2, 2.4, 6.5
+Version: 1.1 - Updated endpoint to /convert-pdf
 """
 
 import os
