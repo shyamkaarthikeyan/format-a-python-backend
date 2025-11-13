@@ -1478,7 +1478,24 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
 
                 print(f"🔧 Processing image {figure_number} for 2-column layout compatibility...", file=sys.stderr)
 
-                # Add spacing before image (NO column break - causes issues)
+                # CRITICAL FIX: Break out of 2-column layout for images
+                # Add continuous section break to exit columns
+                single_col_section = doc.add_section(WD_SECTION.CONTINUOUS)
+                single_col_section.start_type = WD_SECTION.CONTINUOUS
+                
+                # Set to single column for image
+                sectPr = single_col_section._sectPr
+                cols = sectPr.xpath('./w:cols')
+                if cols:
+                    for col in cols:
+                        sectPr.remove(col)
+                
+                # Add new single column setting
+                cols_element = OxmlElement('w:cols')
+                cols_element.set(qn('w:num'), '1')  # Single column
+                sectPr.append(cols_element)
+                
+                # Add spacing before image
                 spacing_before = doc.add_paragraph()
                 spacing_before.paragraph_format.space_before = Pt(12)
                 spacing_before.paragraph_format.space_after = Pt(6)
@@ -1536,8 +1553,27 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
                 spacing_after = doc.add_paragraph()
                 spacing_after.paragraph_format.space_before = Pt(0)
                 spacing_after.paragraph_format.space_after = Pt(12)
+                
+                # CRITICAL FIX: Return to 2-column layout after image
+                # Add continuous section break to resume columns
+                two_col_section = doc.add_section(WD_SECTION.CONTINUOUS)
+                two_col_section.start_type = WD_SECTION.CONTINUOUS
+                
+                # Set back to 2 columns
+                sectPr = two_col_section._sectPr
+                cols = sectPr.xpath('./w:cols')
+                if cols:
+                    for col in cols:
+                        sectPr.remove(col)
+                
+                # Add 2-column setting
+                cols_element = OxmlElement('w:cols')
+                cols_element.set(qn('w:num'), '2')  # Two columns
+                cols_element.set(qn('w:space'), '360')  # 0.25" gap
+                cols_element.set(qn('w:equalWidth'), '1')  # Equal width
+                sectPr.append(cols_element)
 
-                print(f"✅ Successfully added image {figure_number} optimized for 2-column layout", file=sys.stderr)
+                print(f"✅ Successfully added image {figure_number} (single-column span to prevent clipping)", file=sys.stderr)
 
             except Exception as e:
                 print(f"❌ Error adding image {figure_number}: {e}", file=sys.stderr)
