@@ -1478,6 +1478,15 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
 
                 print(f"🔧 Processing image {figure_number} for 2-column layout compatibility...", file=sys.stderr)
 
+                # CRITICAL: Add column break to force image to start at top of next column
+                # This ensures the full image is visible (not cut off at top)
+                from docx.enum.text import WD_BREAK
+                
+                column_break_para = doc.add_paragraph()
+                column_break_run = column_break_para.add_run()
+                column_break_run.add_break(WD_BREAK.COLUMN)
+                print(f"✅ Column break added - image will start at top of column", file=sys.stderr)
+                
                 # CRITICAL: Force text to finish completely before image starts
                 # Add large spacing to ensure NO text overlap
                 spacing_before = doc.add_paragraph()
