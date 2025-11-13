@@ -1440,149 +1440,90 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
         elif (
             block.get("type") == "image" and block.get("data") and block.get("caption")
         ):
-            # Handle image blocks with proper ordering and visibility
+            # Handle image blocks - CLEAN & SIMPLE approach
             img_count = sum(
                 1 for b in content_blocks[: block_idx + 1] if b.get("type") == "image"
             )
 
             print(f"Processing image block in section {section_idx}, image {img_count}", file=sys.stderr)
 
-            # Get image size and caption - 5 SIZE OPTIONS (all fit within 2-column layout)
+            # Get image size - 5 SIZE OPTIONS
             size = block.get("size", "medium")
             size_mapping = IEEE_CONFIG["figure_sizes"]
+            width = size_mapping.get(size, size_mapping["medium"])
             
-            # Get width from size mapping, default to medium
-            width = size_mapping.get(size, size_mapping.get("medium", Inches(2.0)))
+            # Ensure width is within safe bounds
+            width = min(max(width, IEEE_CONFIG["min_figure_width"]), IEEE_CONFIG["max_figure_width"])
             
-            # Ensure width is within safe bounds for 2-column layout
-            min_width = IEEE_CONFIG["min_figure_width"]
-            max_width = IEEE_CONFIG["max_figure_width"]
-            if width < min_width:
-                width = min_width
-            if width > max_width:
-                width = max_width
-            
-            # Get numeric width in inches for logging
             width_inches = width / Inches(1)
-            print(f"📏 Image size '{size}' mapped to width: {width_inches:.2f}\"", file=sys.stderr)
+            print(f"📏 Image size '{size}' = {width_inches:.2f}\"", file=sys.stderr)
+            
             caption_text = sanitize_text(block['caption'])
             figure_number = f"FIG. {section_idx}.{img_count}"
 
-            # SIMPLE & EFFECTIVE: Create properly sized inline image for 2-column layout
             try:
                 import base64
-                # Decode base64 image data
+                # Decode image
                 image_data = block["data"]
                 if "," in image_data:
                     image_data = image_data.split(",")[1]
                 image_bytes = base64.b64decode(image_data)
                 image_stream = BytesIO(image_bytes)
 
-                print(f"🔧 Processing image {figure_number} for 2-column layout compatibility...", file=sys.stderr)
+                # DYNAMIC SPACING: Calculate spacing based on image size
+                # Larger images need more space to be fully visible
+                if width_inches >= 2.8:  # Large/Extra-large
+                    space_before = Pt(18)
+                    space_after = Pt(18)
+                elif width_inches >= 2.2:  # Medium
+                    space_before = Pt(12)
+                    space_after = Pt(12)
+                else:  # Small/Extra-small
+                    space_before = Pt(8)
+                    space_after = Pt(8)
+                
+                print(f"📐 Dynamic spacing: {space_before.pt}pt before, {space_after.pt}pt after", file=sys.stderr)
 
-                # CRITICAL: Add column break to force image to start at top of next column
-                # This ensures the full image is visible (not cut off at top)
-                from docx.enum.text import WD_BREAK
-                
-                column_break_para = doc.add_paragraph()
-                column_break_run = column_break_para.add_run()
-                column_break_run.add_break(WD_BREAK.COLUMN)
-                print(f"✅ Column break added - image will start at top of column", file=sys.stderr)
-                
-                # CRITICAL: Force text to finish completely before image starts
-                # Add large spacing to ensure NO text overlap
-                spacing_before = doc.add_paragraph()
-                spacing_before.paragraph_format.space_before = Pt(24)  # Large space
-                spacing_before.paragraph_format.space_after = Pt(24)   # Large space
-                spacing_before.paragraph_format.line_spacing = Pt(24)
-                spacing_before.paragraph_format.keep_with_next = False  # Don't stick to next
-                
-                # Add another empty paragraph for extra separation
-                extra_space = doc.add_paragraph()
-                extra_space.paragraph_format.space_before = Pt(12)
-                extra_space.paragraph_format.space_after = Pt(12)
-                extra_space.paragraph_format.keep_with_next = False
+                # Add spacing before image (dynamic based on size)
+                spacing_para = doc.add_paragraph()
+                spacing_para.paragraph_format.space_before = space_before
+                spacing_para.paragraph_format.space_after = Pt(0)
+                spacing_para.paragraph_format.keep_with_next = True  # Keep with image
 
-                # Create image paragraph - completely isolated from text
+                # Add image paragraph
                 img_para = doc.add_paragraph()
                 img_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                img_para.paragraph_format.space_before = Pt(24)  # Large space before
-                img_para.paragraph_format.space_after = Pt(24)   # Large space after
-                img_para.paragraph_format.keep_with_next = False
+                img_para.paragraph_format.space_before = Pt(0)
+                img_para.paragraph_format.space_after = Pt(6)
+                img_para.paragraph_format.keep_with_next = True  # Keep with caption
                 img_para.paragraph_format.keep_together = True
-                img_para.paragraph_format.page_break_before = False
                 
-                # Add ONLY the image to this paragraph
+                # Add image
                 run = img_para.add_run()
-                
-                # Ensure image fits comfortably within column width (already validated above)
-                max_col_width = IEEE_CONFIG["max_figure_width"]  # 3.2" - fits in column
-                # Width already validated, but double-check for safety
-                if width > max_col_width:
-                    width = max_col_width
-                
-                width_inches = width / Inches(1)
-                max_inches = max_col_width / Inches(1)
-                print(f"📏 Image width set to: {width_inches:.2f}\" (max allowed: {max_inches:.2f}\")", file=sys.stderr)
-                
-                # Add the image - it will be the ONLY content in this paragraph
                 picture = run.add_picture(image_stream, width=width)
                 
-                # CRITICAL: Set text wrapping to prevent text overlap during PDF conversion
-                # The image is inline, but we need to ensure text doesn't overlap it
+                # Remove effectExtent margins - they cause clipping
                 inline = picture._inline
-                
-                # Add effectExtent to create space around image (prevents text overlap)
                 effectExtent = inline.find('.//{http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing}effectExtent')
-                if effectExtent is None:
-                    from lxml import etree
-                    effectExtent = etree.SubElement(inline, '{http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing}effectExtent')
+                if effectExtent is not None:
+                    # Set to zero - no margins needed
+                    effectExtent.set('l', '0')
+                    effectExtent.set('t', '0')
+                    effectExtent.set('r', '0')
+                    effectExtent.set('b', '0')
                 
-                # Set MINIMAL margins around image to ensure full visibility in narrow columns
-                # 914400 EMUs = 1 inch, so 45720 EMUs = 0.05 inch (minimal margin)
-                # This ensures images fit fully within the 3.3125" column width without clipping
-                margin = '45720'  # 0.05 inch margin on all sides - minimal but prevents text overlap
-                effectExtent.set('l', margin)  # left
-                effectExtent.set('t', margin)  # top
-                effectExtent.set('r', margin)  # right
-                effectExtent.set('b', margin)  # bottom
+                print(f"✅ Image added: {picture.width/914400:.2f}\" x {picture.height/914400:.2f}\"", file=sys.stderr)
                 
-                print(f"✅ Minimal text wrapping margins applied (0.05\" on all sides for full visibility)", file=sys.stderr)
-                graphic = inline.graphic
-                graphicData = graphic.graphicData
-                pic = graphicData.pic
-                
-                # Access the blipFill element which contains crop information
-                blipFill = pic.blipFill
-                if blipFill is not None:
-                    # Check for srcRect (source rectangle/crop) and remove it
-                    srcRect_elements = blipFill.findall('.//{http://schemas.openxmlformats.org/drawingml/2006/main}srcRect')
-                    for srcRect in srcRect_elements:
-                        blipFill.remove(srcRect)
-                    
-                    # Add a new srcRect with no cropping (all values = 0)
-                    from lxml import etree
-                    srcRect = etree.SubElement(blipFill, '{http://schemas.openxmlformats.org/drawingml/2006/main}srcRect')
-                    srcRect.set('l', '0')  # left crop = 0
-                    srcRect.set('t', '0')  # top crop = 0
-                    srcRect.set('r', '0')  # right crop = 0
-                    srcRect.set('b', '0')  # bottom crop = 0
-                
-                # Log dimensions for debugging
-                print(f"📐 Image dimensions: {picture.width} x {picture.height} EMUs", file=sys.stderr)
-                print(f"📐 Image size: {picture.width/914400:.2f}\" x {picture.height/914400:.2f}\"", file=sys.stderr)
-                print(f"✅ Crop prevention applied (srcRect set to 0,0,0,0)", file=sys.stderr)
-                
-                # Scale down if too tall to fit in page
-                max_height = Inches(3.5)
+                # Scale if too tall
+                max_height = Inches(4.0)
                 if picture.height > max_height:
                     scale_factor = max_height / picture.height
                     run.clear()
                     image_stream.seek(0)
                     picture = run.add_picture(image_stream, width=width * scale_factor)
-                    print(f"📐 Image scaled to fit height: {max_height}", file=sys.stderr)
+                    print(f"📐 Scaled to fit height", file=sys.stderr)
 
-                # Add figure caption in separate paragraph
+                # Add caption
                 caption_para = doc.add_paragraph()
                 caption_run = caption_para.add_run(f"{figure_number}: {caption_text.upper()}")
                 caption_run.font.name = "Times New Roman"
@@ -1590,26 +1531,12 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
                 caption_run.bold = True
                 caption_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
                 caption_para.paragraph_format.space_before = Pt(3)
-                caption_para.paragraph_format.space_after = Pt(12)
+                caption_para.paragraph_format.space_after = space_after  # Dynamic spacing
 
-                # CRITICAL: Force large spacing after image to prevent text overlap
-                spacing_after = doc.add_paragraph()
-                spacing_after.paragraph_format.space_before = Pt(24)  # Large space
-                spacing_after.paragraph_format.space_after = Pt(24)   # Large space
-                spacing_after.paragraph_format.line_spacing = Pt(24)
-                spacing_after.paragraph_format.keep_with_next = False
-                
-                # Add another empty paragraph for extra separation
-                extra_space_after = doc.add_paragraph()
-                extra_space_after.paragraph_format.space_before = Pt(12)
-                extra_space_after.paragraph_format.space_after = Pt(12)
-                extra_space_after.paragraph_format.keep_with_next = False
-
-                print(f"✅ Successfully added image {figure_number} in column (max {max_inches:.2f}\" fits in 3.3\" column)", file=sys.stderr)
+                print(f"✅ Image {figure_number} added successfully", file=sys.stderr)
 
             except Exception as e:
                 print(f"❌ Error adding image {figure_number}: {e}", file=sys.stderr)
-                # Add simple placeholder if image fails
                 para = doc.add_paragraph(f"[Image: {caption_text}]")
                 para.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
