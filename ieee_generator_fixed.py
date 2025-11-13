@@ -50,7 +50,8 @@ def add_image_with_proper_layout(doc, image_data, width, caption_text="", figure
         image_stream = BytesIO(image_bytes)
         
         # Ensure width fits within 2-column layout constraints
-        max_column_width = Inches(3.2)  # Increased from 3.0 for better image visibility
+        # Column width is 3.3125", with minimal 0.05" margins on each side = 3.2125" usable
+        max_column_width = Inches(3.1)  # Safe maximum to ensure full visibility without clipping
         if width > max_column_width:
             width = max_column_width
         
@@ -184,19 +185,19 @@ IEEE_CONFIG = {
     "spacing_keywords_after": 240,  # 12pt after keywords
     "spacing_section_before": 240,  # 12pt before section headings
     "spacing_section_after": 0,  # 0pt after section headings
-    # Figure specifications - 5 SIZE OPTIONS (all fit within 2-column layout)
+    # Figure specifications - 5 SIZE OPTIONS (all fit within 2-column layout with minimal margins)
     "figure_max_width_twips": 4770,  # Max 3.3125" width (column width)
     "figure_spacing": 120,  # 6pt before/after figures
     "figure_sizes": {
         "extra-small": Inches(1.0),   # 1.0" - Minimum size for visibility
         "small": Inches(1.5),          # 1.5" - Small but clear
-        "medium": Inches(2.0),         # 2.0" - Balanced size
-        "large": Inches(2.5),          # 2.5" - Large and prominent
-        "extra-large": Inches(2.8),    # 2.8" - Maximum size (fits safely in 3.3" column)
+        "medium": Inches(2.2),         # 2.2" - Balanced size (increased for better visibility)
+        "large": Inches(2.7),          # 2.7" - Large and prominent
+        "extra-large": Inches(3.0),    # 3.0" - Maximum size (fits in 3.3" column with 0.05" margins)
     },
     "max_figure_height": Inches(3.5),  # Max figure height (reduced for 2-column fit)
     "min_figure_width": Inches(1.0),   # Minimum width for visibility
-    "max_figure_width": Inches(3.0),   # Maximum width (fits safely in 3.3125" column with margin)
+    "max_figure_width": Inches(3.1),   # Maximum width (fits in 3.3125" column with minimal margins)
     # Table specifications - 5 SIZE OPTIONS (all fit within 2-column layout)
     "table_sizes": {
         "extra-small": Inches(1.5),    # 1.5" - Compact table
@@ -1536,15 +1537,16 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
                     from lxml import etree
                     effectExtent = etree.SubElement(inline, '{http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing}effectExtent')
                 
-                # Set margins around image to prevent text overlap (in EMUs)
-                # 914400 EMUs = 1 inch
-                margin = '457200'  # 0.5 inch margin on all sides
+                # Set MINIMAL margins around image to ensure full visibility in narrow columns
+                # 914400 EMUs = 1 inch, so 45720 EMUs = 0.05 inch (minimal margin)
+                # This ensures images fit fully within the 3.3125" column width without clipping
+                margin = '45720'  # 0.05 inch margin on all sides - minimal but prevents text overlap
                 effectExtent.set('l', margin)  # left
                 effectExtent.set('t', margin)  # top
                 effectExtent.set('r', margin)  # right
                 effectExtent.set('b', margin)  # bottom
                 
-                print(f"✅ Text wrapping margins applied (0.5\" on all sides)", file=sys.stderr)
+                print(f"✅ Minimal text wrapping margins applied (0.05\" on all sides for full visibility)", file=sys.stderr)
                 graphic = inline.graphic
                 graphicData = graphic.graphicData
                 pic = graphicData.pic
