@@ -192,11 +192,11 @@ IEEE_CONFIG = {
         "small": Inches(1.5),          # 1.5" - Small but clear
         "medium": Inches(2.0),         # 2.0" - Balanced size
         "large": Inches(2.5),          # 2.5" - Large and prominent
-        "extra-large": Inches(3.0),    # 3.0" - Maximum size (fits in column)
+        "extra-large": Inches(2.8),    # 2.8" - Maximum size (fits safely in 3.3" column)
     },
     "max_figure_height": Inches(3.5),  # Max figure height (reduced for 2-column fit)
     "min_figure_width": Inches(1.0),   # Minimum width for visibility
-    "max_figure_width": Inches(3.2),   # Maximum width (safely fits in 3.3125" column)
+    "max_figure_width": Inches(3.0),   # Maximum width (fits safely in 3.3125" column with margin)
     # Table specifications - 5 SIZE OPTIONS (all fit within 2-column layout)
     "table_sizes": {
         "extra-small": Inches(1.5),    # 1.5" - Compact table
@@ -1478,21 +1478,7 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
 
                 print(f"🔧 Processing image {figure_number} for 2-column layout compatibility...", file=sys.stderr)
 
-                # ULTIMATE FIX: Break out of 2-column layout for images to span full width
-                # This is the ONLY way to prevent clipping in narrow columns
-                single_col_section = doc.add_section(WD_SECTION.CONTINUOUS)
-                
-                # Configure as single column
-                sectPr = single_col_section._sectPr
-                # Remove existing column settings
-                for cols in sectPr.xpath('./w:cols'):
-                    sectPr.remove(cols)
-                # Add single column
-                cols = OxmlElement('w:cols')
-                cols.set(qn('w:num'), '1')
-                sectPr.append(cols)
-                
-                # Add spacing before image
+                # Add spacing before image (stays in 2-column layout)
                 spacing_before = doc.add_paragraph()
                 spacing_before.paragraph_format.space_before = Pt(12)
                 spacing_before.paragraph_format.space_after = Pt(6)
@@ -1519,24 +1505,25 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
                 # Add the image - it will be the ONLY content in this paragraph
                 picture = run.add_picture(image_stream, width=width)
                 
-                # CRITICAL FIX: Change from inline to anchored (not inline with text)
-                # This prevents the image from being treated as a text character
+                # CRITICAL: Set text wrapping to prevent text overlap during PDF conversion
+                # The image is inline, but we need to ensure text doesn't overlap it
                 inline = picture._inline
                 
-                # Try to convert inline to anchor (floating) to prevent text wrapping
-                # Note: python-docx doesn't directly support this, but we can try to modify the XML
-                try:
-                    # Get the parent run element
-                    r = inline.getparent()
-                    # The inline element makes it flow with text
-                    # We need to ensure it's on its own line by making sure
-                    # the paragraph has no other content
-                    pass  # Keep as inline but ensure paragraph isolation works
-                except:
-                    pass
+                # Add effectExtent to create space around image (prevents text overlap)
+                effectExtent = inline.find('.//{http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing}effectExtent')
+                if effectExtent is None:
+                    from lxml import etree
+                    effectExtent = etree.SubElement(inline, '{http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing}effectExtent')
                 
-                # CRITICAL: Explicitly prevent any image cropping
-                inline = picture._inline
+                # Set margins around image to prevent text overlap (in EMUs)
+                # 914400 EMUs = 1 inch
+                margin = '457200'  # 0.5 inch margin on all sides
+                effectExtent.set('l', margin)  # left
+                effectExtent.set('t', margin)  # top
+                effectExtent.set('r', margin)  # right
+                effectExtent.set('b', margin)  # bottom
+                
+                print(f"✅ Text wrapping margins applied (0.5\" on all sides)", file=sys.stderr)
                 graphic = inline.graphic
                 graphicData = graphic.graphicData
                 pic = graphicData.pic
@@ -1585,23 +1572,8 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
                 spacing_after = doc.add_paragraph()
                 spacing_after.paragraph_format.space_before = Pt(0)
                 spacing_after.paragraph_format.space_after = Pt(12)
-                
-                # ULTIMATE FIX: Return to 2-column layout after image
-                two_col_section = doc.add_section(WD_SECTION.CONTINUOUS)
-                
-                # Configure as 2 columns
-                sectPr = two_col_section._sectPr
-                # Remove existing column settings
-                for cols in sectPr.xpath('./w:cols'):
-                    sectPr.remove(cols)
-                # Add 2-column layout
-                cols = OxmlElement('w:cols')
-                cols.set(qn('w:num'), '2')
-                cols.set(qn('w:space'), '360')  # 0.25" gap
-                cols.set(qn('w:equalWidth'), '1')
-                sectPr.append(cols)
 
-                print(f"✅ Successfully added image {figure_number} (full-width, no clipping possible)", file=sys.stderr)
+                print(f"✅ Successfully added image {figure_number} in column (max {max_inches:.2f}\" fits in 3.3\" column)", file=sys.stderr)
 
             except Exception as e:
                 print(f"❌ Error adding image {figure_number}: {e}", file=sys.stderr)
