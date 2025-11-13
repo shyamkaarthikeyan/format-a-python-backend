@@ -1478,16 +1478,28 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
 
                 print(f"🔧 Processing image {figure_number} for 2-column layout compatibility...", file=sys.stderr)
 
-                # Add spacing before image (stays in 2-column layout)
+                # CRITICAL: Force text to finish completely before image starts
+                # Add large spacing to ensure NO text overlap
                 spacing_before = doc.add_paragraph()
-                spacing_before.paragraph_format.space_before = Pt(12)
-                spacing_before.paragraph_format.space_after = Pt(6)
+                spacing_before.paragraph_format.space_before = Pt(24)  # Large space
+                spacing_before.paragraph_format.space_after = Pt(24)   # Large space
+                spacing_before.paragraph_format.line_spacing = Pt(24)
+                spacing_before.paragraph_format.keep_with_next = False  # Don't stick to next
+                
+                # Add another empty paragraph for extra separation
+                extra_space = doc.add_paragraph()
+                extra_space.paragraph_format.space_before = Pt(12)
+                extra_space.paragraph_format.space_after = Pt(12)
+                extra_space.paragraph_format.keep_with_next = False
 
-                # Create image paragraph - now has full page width available
+                # Create image paragraph - completely isolated from text
                 img_para = doc.add_paragraph()
                 img_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                img_para.paragraph_format.space_before = Pt(6)
-                img_para.paragraph_format.space_after = Pt(6)
+                img_para.paragraph_format.space_before = Pt(24)  # Large space before
+                img_para.paragraph_format.space_after = Pt(24)   # Large space after
+                img_para.paragraph_format.keep_with_next = False
+                img_para.paragraph_format.keep_together = True
+                img_para.paragraph_format.page_break_before = False
                 
                 # Add ONLY the image to this paragraph
                 run = img_para.add_run()
@@ -1568,10 +1580,18 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
                 caption_para.paragraph_format.space_before = Pt(3)
                 caption_para.paragraph_format.space_after = Pt(12)
 
-                # Add spacing after image
+                # CRITICAL: Force large spacing after image to prevent text overlap
                 spacing_after = doc.add_paragraph()
-                spacing_after.paragraph_format.space_before = Pt(0)
-                spacing_after.paragraph_format.space_after = Pt(12)
+                spacing_after.paragraph_format.space_before = Pt(24)  # Large space
+                spacing_after.paragraph_format.space_after = Pt(24)   # Large space
+                spacing_after.paragraph_format.line_spacing = Pt(24)
+                spacing_after.paragraph_format.keep_with_next = False
+                
+                # Add another empty paragraph for extra separation
+                extra_space_after = doc.add_paragraph()
+                extra_space_after.paragraph_format.space_before = Pt(12)
+                extra_space_after.paragraph_format.space_after = Pt(12)
+                extra_space_after.paragraph_format.keep_with_next = False
 
                 print(f"✅ Successfully added image {figure_number} in column (max {max_inches:.2f}\" fits in 3.3\" column)", file=sys.stderr)
 
