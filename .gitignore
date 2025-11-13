@@ -53,3 +53,4 @@ htmlcov/
 venv/
 env/
 ENV/
+.env*.local
