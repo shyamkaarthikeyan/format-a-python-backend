@@ -3,6 +3,7 @@ import sys
 import os
 from http.server import BaseHTTPRequestHandler
 
+# Version: 2.0 - No fallback, PDF service only
 # Add parent directory to path to import ieee_generator_fixed
 current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.join(current_dir, '..')
