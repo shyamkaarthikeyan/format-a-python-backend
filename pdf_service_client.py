@@ -227,7 +227,7 @@ class PDFServiceClient:
             
             # Send conversion request to correct endpoint
             response = self.session.post(
-                f"{self.service_url}/convert",
+                f"{self.service_url}/convert-pdf",
                 json=request.to_dict(),
                 timeout=self.timeout
             )
