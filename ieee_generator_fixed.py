@@ -1478,18 +1478,25 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
 
                 print(f"🔧 Processing image {figure_number} for 2-column layout compatibility...", file=sys.stderr)
 
-                # Add spacing before image
+                # CRITICAL: Add empty paragraph before image to separate from text
                 spacing_before = doc.add_paragraph()
                 spacing_before.paragraph_format.space_before = Pt(12)
-                spacing_before.paragraph_format.space_after = Pt(6)
+                spacing_before.paragraph_format.space_after = Pt(0)
+                spacing_before.paragraph_format.line_spacing = Pt(12)
 
-                # Create simple image paragraph with center alignment
+                # Create image paragraph - MUST be completely isolated from text
                 img_para = doc.add_paragraph()
                 img_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                img_para.paragraph_format.space_before = Pt(6)
-                img_para.paragraph_format.space_after = Pt(6)
+                img_para.paragraph_format.space_before = Pt(12)
+                img_para.paragraph_format.space_after = Pt(12)
                 
-                # Add image with proper sizing for 2-column layout
+                # CRITICAL: Ensure paragraph is on its own line (not inline with text)
+                img_para.paragraph_format.keep_with_next = False
+                img_para.paragraph_format.keep_together = True
+                img_para.paragraph_format.page_break_before = False
+                img_para.paragraph_format.widow_control = False
+                
+                # Add ONLY the image to this paragraph (no text before or after)
                 run = img_para.add_run()
                 
                 # Ensure image fits comfortably within column width (already validated above)
@@ -1550,10 +1557,11 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
                 caption_para.paragraph_format.space_before = Pt(3)
                 caption_para.paragraph_format.space_after = Pt(12)
 
-                # Add simple spacing after image
+                # CRITICAL: Add empty paragraph after image to separate from text
                 spacing_after = doc.add_paragraph()
                 spacing_after.paragraph_format.space_before = Pt(0)
                 spacing_after.paragraph_format.space_after = Pt(12)
+                spacing_after.paragraph_format.line_spacing = Pt(12)
 
                 print(f"✅ Successfully added image {figure_number} in 2-column layout", file=sys.stderr)
 
