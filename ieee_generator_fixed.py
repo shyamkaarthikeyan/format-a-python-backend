@@ -832,10 +832,12 @@ def add_ieee_table(doc, table_data, section_idx, table_count):
             if table_width > max_width:
                 table_width = max_width
             
-            # Convert to twips for OpenXML
-            table_width_twips = int(table_width * 1440)  # 1440 twips per inch
+            # Convert to twips for OpenXML (1 inch = 1440 twips)
+            # table_width is an Inches object, need to get the numeric value in inches
+            table_width_inches = table_width / Inches(1)  # Get numeric value
+            table_width_twips = int(table_width_inches * 1440)
             
-            print(f"📏 Table size '{table_size}' mapped to width: {table_width} ({table_width_twips} twips)", file=sys.stderr)
+            print(f"📏 Table size '{table_size}' mapped to width: {table_width_inches:.2f}\" ({table_width_twips} twips)", file=sys.stderr)
             
             # Set table width to fit within single column (2-column layout compatible)
             tblW = OxmlElement('w:tblW')
@@ -867,10 +869,10 @@ def add_ieee_table(doc, table_data, section_idx, table_count):
             
             # Calculate column width based on table size for 2-column layout compatibility
             col_width_twips = table_width_twips // num_cols  # Distribute table width equally
-            min_width_twips = 720  # Minimum 0.5 inch per column for 2-column layout
+            min_width_twips = 720  # Minimum 0.5 inch per column
             final_col_width = max(min_width_twips, col_width_twips)
             
-            print(f"📏 Column width: {final_col_width} twips ({final_col_width/1440:.2f} inches)", file=sys.stderr)
+            print(f"📏 Column width: {final_col_width} twips ({final_col_width/1440:.2f}\")", file=sys.stderr)
             
             for row in table.rows:
                 for cell in row.cells:
@@ -1458,7 +1460,9 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
             if width > max_width:
                 width = max_width
             
-            print(f"📏 Image size '{size}' mapped to width: {width}", file=sys.stderr)
+            # Get numeric width in inches for logging
+            width_inches = width / Inches(1)
+            print(f"📏 Image size '{size}' mapped to width: {width_inches:.2f}\"", file=sys.stderr)
             caption_text = sanitize_text(block['caption'])
             figure_number = f"FIG. {section_idx}.{img_count}"
 
@@ -1474,65 +1478,16 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
 
                 print(f"🔧 Processing image {figure_number} for 2-column layout compatibility...", file=sys.stderr)
 
-                # ULTIMATE FIX: Force column break before image to ensure complete separation
-                from docx.enum.text import WD_BREAK
-                
-                # Add paragraph with column break to force image to new position
-                break_para = doc.add_paragraph()
-                break_run = break_para.add_run()
-                break_run.add_break(WD_BREAK.COLUMN)
-                break_para.paragraph_format.space_before = Pt(0)
-                break_para.paragraph_format.space_after = Pt(6)
+                # Add spacing before image (NO column break - causes issues)
+                spacing_before = doc.add_paragraph()
+                spacing_before.paragraph_format.space_before = Pt(12)
+                spacing_before.paragraph_format.space_after = Pt(6)
 
-                # FORCE LINE BREAK BEFORE IMAGE - Prevents inline text issues
-                line_break_before = doc.add_paragraph()
-                line_break_before.paragraph_format.space_before = Pt(6)
-                line_break_before.paragraph_format.space_after = Pt(3)
-                line_break_before.paragraph_format.keep_with_next = False
-                line_break_before.paragraph_format.page_break_before = False
-
-                # Create image paragraph with FORCED isolation from text
+                # Create simple image paragraph with center alignment
                 img_para = doc.add_paragraph()
                 img_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
                 img_para.paragraph_format.space_before = Pt(6)
                 img_para.paragraph_format.space_after = Pt(6)
-                img_para.paragraph_format.keep_with_next = True  # Keep image with caption
-                img_para.paragraph_format.keep_together = True  # Prevent splitting
-                
-                # Set paragraph properties to prevent clipping in 2-column layout
-                pPr = img_para._element.get_or_add_pPr()
-                
-                # Clear any existing formatting that might interfere
-                for elem in pPr.xpath("./w:spacing | ./w:ind | ./w:jc | ./w:keepNext | ./w:keepLines"):
-                    pPr.remove(elem)
-                
-                # Center alignment for images
-                jc = OxmlElement("w:jc")
-                jc.set(qn("w:val"), "center")
-                pPr.append(jc)
-                
-                # CRITICAL: Force paragraph to be on its own line
-                keepNext = OxmlElement("w:keepNext")
-                keepNext.set(qn("w:val"), "1")
-                pPr.append(keepNext)
-                
-                keepLines = OxmlElement("w:keepLines")
-                keepLines.set(qn("w:val"), "1")
-                pPr.append(keepLines)
-                
-                # Proper spacing for image visibility with generous margins
-                spacing = OxmlElement("w:spacing")
-                spacing.set(qn("w:before"), "240")  # 12pt before (increased)
-                spacing.set(qn("w:after"), "240")   # 12pt after (increased)
-                spacing.set(qn("w:line"), "360")    # 18pt line height (increased)
-                spacing.set(qn("w:lineRule"), "exact")
-                pPr.append(spacing)
-                
-                # Ensure no indentation that might cause clipping
-                ind = OxmlElement("w:ind")
-                ind.set(qn("w:left"), "0")
-                ind.set(qn("w:right"), "0")
-                pPr.append(ind)
                 
                 # Add image with proper sizing for 2-column layout
                 run = img_para.add_run()
@@ -1543,59 +1498,20 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
                 if width > max_col_width:
                     width = max_col_width
                 
-                print(f"📏 Image width set to: {width} (max allowed: {max_col_width})", file=sys.stderr)
+                width_inches = width / Inches(1)
+                max_inches = max_col_width / Inches(1)
+                print(f"📏 Image width set to: {width_inches:.2f}\" (max allowed: {max_inches:.2f}\")", file=sys.stderr)
                 
                 picture = run.add_picture(image_stream, width=width)
                 
-                # Set comprehensive image properties for maximum visibility
-                inline = picture._inline
-                docPr = inline.docPr
-                docPr.set('name', f'Figure_{section_idx}_{img_count}')
-                docPr.set('descr', f'Section Figure: {caption_text}')
-                
-                # Ensure image has proper positioning within the paragraph
-                graphic = inline.graphic
-                graphicData = graphic.graphicData
-                pic = graphicData.pic
-                
-                # Set image properties for maximum visibility
-                spPr = pic.spPr
-                if spPr is not None:
-                    xfrm = spPr.xfrm
-                    if xfrm is not None:
-                        # Ensure image is properly positioned
-                        off = xfrm.off
-                        if off is not None:
-                            off.set('x', '0')
-                            off.set('y', '0')
-                
-                # Scale down if too tall - IMPROVED to maintain aspect ratio and prevent clipping
-                max_height = Inches(3.5)  # Reduced from 4.0 to fit better in 2-column
+                # Scale down if too tall to fit in page
+                max_height = Inches(3.5)
                 if picture.height > max_height:
-                    # Calculate scale factor to fit within max height
                     scale_factor = max_height / picture.height
-                    new_width = width * scale_factor
-                    
-                    # Ensure scaled width still fits in column
-                    if new_width > max_col_width:
-                        new_width = max_col_width
-                        scale_factor = new_width / width
-                    
                     run.clear()
                     image_stream.seek(0)
-                    picture = run.add_picture(
-                        image_stream,
-                        width=new_width,
-                        height=max_height if (width * scale_factor <= max_col_width) else (picture.height * (max_col_width / width)),
-                    )
-                    
-                    # Reapply properties after scaling
-                    inline = picture._inline
-                    docPr = inline.docPr
-                    docPr.set('name', f'Figure_{section_idx}_{img_count}_scaled')
-                    docPr.set('descr', f'Section Figure: {caption_text} (scaled)')
-                    
-                    print(f"📐 Image scaled: original height exceeded {max_height}, scaled to maintain aspect ratio", file=sys.stderr)
+                    picture = run.add_picture(image_stream, width=width * scale_factor)
+                    print(f"📐 Image scaled to fit height: {max_height}", file=sys.stderr)
 
                 # Add figure caption in separate paragraph
                 caption_para = doc.add_paragraph()
@@ -1607,24 +1523,10 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
                 caption_para.paragraph_format.space_before = Pt(3)
                 caption_para.paragraph_format.space_after = Pt(12)
 
-                # FORCE COMPLETE SEPARATION - Prevents any inline text issues
+                # Add simple spacing after image
                 spacing_after = doc.add_paragraph()
-                spacing_after.paragraph_format.space_before = Pt(6)
-                spacing_after.paragraph_format.space_after = Pt(24)  # Large spacing to prevent overlap
-                spacing_after.paragraph_format.keep_with_next = False
-                spacing_after.paragraph_format.page_break_before = False
-                
-                # Add mandatory paragraph break to ensure complete separation
-                separator_para = doc.add_paragraph()
-                separator_para.paragraph_format.space_before = Pt(0)
-                separator_para.paragraph_format.space_after = Pt(18)
-                separator_para.paragraph_format.keep_with_next = False
-                
-                # Add final spacing paragraph to guarantee text separation
-                final_spacing = doc.add_paragraph()
-                final_spacing.paragraph_format.space_before = Pt(0)
-                final_spacing.paragraph_format.space_after = Pt(12)
-                final_spacing.paragraph_format.keep_with_next = False
+                spacing_after.paragraph_format.space_before = Pt(0)
+                spacing_after.paragraph_format.space_after = Pt(12)
 
                 print(f"✅ Successfully added image {figure_number} optimized for 2-column layout", file=sys.stderr)
 
