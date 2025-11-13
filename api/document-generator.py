@@ -24,26 +24,32 @@ except ImportError as e:
 
 def get_pdf_service_client():
     """Get or create PDF service client with current environment variables"""
-    PDF_SERVICE_URL = os.environ.get('PDF_SERVICE_URL', '')
-    PDF_SERVICE_TIMEOUT = int(os.environ.get('PDF_SERVICE_TIMEOUT', '30'))
-    
-    if not PDF_SERVICE_AVAILABLE:
-        print("❌ PDF service client not available (import failed)", file=sys.stderr)
-        return None
-    
-    if not PDF_SERVICE_URL:
-        print("❌ PDF_SERVICE_URL environment variable not set", file=sys.stderr)
-        return None
-    
     try:
+        PDF_SERVICE_URL = os.environ.get('PDF_SERVICE_URL', '')
+        PDF_SERVICE_TIMEOUT = int(os.environ.get('PDF_SERVICE_TIMEOUT', '30'))
+        
+        print(f"🔍 DEBUG: PDF_SERVICE_AVAILABLE={PDF_SERVICE_AVAILABLE}", file=sys.stderr)
+        print(f"🔍 DEBUG: PDF_SERVICE_URL={PDF_SERVICE_URL}", file=sys.stderr)
+        
+        if not PDF_SERVICE_AVAILABLE:
+            print("❌ PDF service client not available (import failed)", file=sys.stderr)
+            return None
+        
+        if not PDF_SERVICE_URL:
+            print("❌ PDF_SERVICE_URL environment variable not set", file=sys.stderr)
+            return None
+        
+        print(f"🔧 Creating PDFServiceClient with URL: {PDF_SERVICE_URL}", file=sys.stderr)
         client = PDFServiceClient(
             service_url=PDF_SERVICE_URL,
             timeout=PDF_SERVICE_TIMEOUT
         )
-        print(f"✅ PDF service client initialized: {PDF_SERVICE_URL}", file=sys.stderr)
+        print(f"✅ PDF service client initialized successfully", file=sys.stderr)
         return client
     except Exception as e:
-        print(f"⚠️ Failed to initialize PDF service client: {e}", file=sys.stderr)
+        print(f"❌ EXCEPTION in get_pdf_service_client: {e}", file=sys.stderr)
+        import traceback
+        traceback.print_exc(file=sys.stderr)
         return None
 
 class handler(BaseHTTPRequestHandler):
@@ -121,15 +127,20 @@ class handler(BaseHTTPRequestHandler):
             print(f"✅ DOCX generated for preview (size: {len(docx_bytes)} bytes)", file=sys.stderr)
             
             # Step 2: Convert DOCX to PDF - PDF SERVICE ONLY (NO FALLBACK)
+            print("📄 Step 2: Initializing PDF service client...", file=sys.stderr)
             pdf_client = get_pdf_service_client()
             if not pdf_client:
-                raise Exception("PDF service not configured. Set PDF_SERVICE_URL environment variable.")
+                error_msg = "PDF service not configured. Set PDF_SERVICE_URL environment variable."
+                print(f"❌ {error_msg}", file=sys.stderr)
+                raise Exception(error_msg)
             
             print("📄 Step 2: Converting DOCX to PDF for preview using PDF service...", file=sys.stderr)
             import base64
             
             # Call PDF service - NO FALLBACK
+            print(f"🔧 Calling pdf_client.convert_to_pdf with {len(docx_bytes)} bytes...", file=sys.stderr)
             response = pdf_client.convert_to_pdf(docx_bytes)
+            print(f"🔧 PDF service response received: success={response.success}", file=sys.stderr)
             
             if not response.success or not response.pdf_data:
                 raise Exception(f"PDF service conversion failed: {response.error}")
@@ -161,6 +172,9 @@ class handler(BaseHTTPRequestHandler):
             self.wfile.write(json.dumps(response).encode('utf-8'))
             
         except Exception as e:
+            print(f"❌ EXCEPTION in do_POST: {e}", file=sys.stderr)
+            import traceback
+            traceback.print_exc(file=sys.stderr)
             self.send_error_response(500, f'Document generation failed: {str(e)}')
     
     def handle_pdf_via_docx_conversion(self, document_data):
