@@ -225,9 +225,9 @@ class PDFServiceClient:
             
             logger.info(f"Sending PDF conversion request (DOCX size: {len(docx_bytes)} bytes)")
             
-            # Send conversion request
+            # Send conversion request to correct endpoint
             response = self.session.post(
-                f"{self.service_url}/convert-pdf",
+                f"{self.service_url}/convert",
                 json=request.to_dict(),
                 timeout=self.timeout
             )
