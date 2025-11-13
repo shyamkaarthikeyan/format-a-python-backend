@@ -2232,9 +2232,9 @@ def generate_ieee_document(form_data):
     for idx, section_data in enumerate(form_data.get("sections", []), 1):
         add_section(doc, section_data, idx, is_first_section=(idx == 1))
 
-    # NOTE: Standalone tables and figures are now processed through the content blocks system
-    # This ensures proper ordering and prevents duplication
-    print("Standalone tables and figures will be processed through content blocks for proper ordering", file=sys.stderr)
+    # NOTE: Standalone tables and figures are IGNORED
+    # Images and tables must be added within section contentBlocks only
+    # This prevents creating a separate "Figures and Images" section
 
     # Add references with EXACT IEEE LaTeX formatting
     add_references(doc, form_data.get("references", []))
@@ -2363,54 +2363,15 @@ def build_document_model(form_data):
             
             model["authors"].append(author_row)
     
-    # Process standalone tables and figures first (from table-form.tsx and figure-form.tsx)
+    # NOTE: Standalone tables and figures are IGNORED
+    # Images and tables should only be added within section contentBlocks
+    # This prevents creating a separate "Figures and Images" section
     standalone_tables = form_data.get("tables", [])
     standalone_figures = form_data.get("figures", [])
     
-    # Add standalone tables and figures to the first section or create a new section
     if standalone_tables or standalone_figures:
-        # Find or create a section for standalone content
-        if not sections:
-            sections.append({
-                "title": "Content",
-                "contentBlocks": []
-            })
-        
-        # Add standalone tables as content blocks with proper ordering
-        for table in standalone_tables:
-            table_block = {
-                "type": "table",
-                "tableType": table.get("type", table.get("tableType", "interactive")),
-                "tableName": table.get("tableName", ""),
-                "caption": table.get("caption", ""),
-                "size": table.get("size", "medium"),
-                "order": table.get("order", 999)  # Use table's order or default to end
-            }
-            
-            if table_block["tableType"] == "interactive":
-                table_block["headers"] = table.get("headers", [])
-                table_block["tableData"] = table.get("tableData", [])
-            elif table_block["tableType"] == "image":
-                table_block["data"] = table.get("data", "")
-                table_block["originalName"] = table.get("originalName", "")
-                table_block["mimeType"] = table.get("mimeType", "")
-            elif table_block["tableType"] == "latex":
-                table_block["latexCode"] = table.get("latexCode", "")
-            
-            sections[0].setdefault("contentBlocks", []).append(table_block)
-        
-        # Add standalone figures as content blocks with proper ordering
-        for figure in standalone_figures:
-            figure_block = {
-                "type": "image",
-                "data": figure.get("data", ""),
-                "caption": figure.get("caption", ""),
-                "size": figure.get("size", "medium"),
-                "originalName": figure.get("originalName", ""),
-                "mimeType": figure.get("mimeType", ""),
-                "order": figure.get("order", 999)  # Use figure's order or default to end
-            }
-            sections[0].setdefault("contentBlocks", []).append(figure_block)
+        print(f"⚠️ WARNING: Found {len(standalone_tables)} standalone tables and {len(standalone_figures)} standalone figures", file=sys.stderr)
+        print("⚠️ These will be IGNORED. Please add images and tables within section contentBlocks.", file=sys.stderr)
 
     # Process sections with content blocks
     for section_idx, section in enumerate(sections, 1):
