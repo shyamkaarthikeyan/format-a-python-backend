@@ -186,18 +186,19 @@ IEEE_CONFIG = {
     "spacing_section_before": 240,  # 12pt before section headings
     "spacing_section_after": 0,  # 0pt after section headings
     # Figure specifications - 5 SIZE OPTIONS (all fit within 2-column layout with minimal margins)
+    # Column width is 3.3125", with 0.05" margins on each side = 3.2125" usable space
     "figure_max_width_twips": 4770,  # Max 3.3125" width (column width)
     "figure_spacing": 120,  # 6pt before/after figures
     "figure_sizes": {
-        "extra-small": Inches(1.0),   # 1.0" - Minimum size for visibility
-        "small": Inches(1.5),          # 1.5" - Small but clear
-        "medium": Inches(2.2),         # 2.2" - Balanced size (increased for better visibility)
-        "large": Inches(2.7),          # 2.7" - Large and prominent
-        "extra-large": Inches(3.0),    # 3.0" - Maximum size (fits in 3.3" column with 0.05" margins)
+        "extra-small": Inches(1.8),   # 1.8" - Small but visible (was 1.0")
+        "small": Inches(2.2),          # 2.2" - Clear and readable (was 1.5")
+        "medium": Inches(2.6),         # 2.6" - Balanced, fills column nicely (was 2.2")
+        "large": Inches(2.9),          # 2.9" - Large and prominent (was 2.7")
+        "extra-large": Inches(3.1),    # 3.1" - Maximum size, fills column (was 3.0")
     },
     "max_figure_height": Inches(3.5),  # Max figure height (reduced for 2-column fit)
-    "min_figure_width": Inches(1.0),   # Minimum width for visibility
-    "max_figure_width": Inches(3.1),   # Maximum width (fits in 3.3125" column with minimal margins)
+    "min_figure_width": Inches(1.8),   # Minimum width for visibility (increased from 1.0")
+    "max_figure_width": Inches(3.1),   # Maximum width (fits in 3.3125" column with 0.1" total margins)
     # Table specifications - 5 SIZE OPTIONS (all fit within 2-column layout)
     "table_sizes": {
         "extra-small": Inches(1.5),    # 1.5" - Compact table
