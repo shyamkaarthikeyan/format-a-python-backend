@@ -9,3 +9,6 @@ reportlab==4.0.4
 
 # Other dependencies
 requests==2.31.0
+
+# Testing
+pytest==7.4.0

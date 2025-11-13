@@ -2,16 +2,13 @@
 IEEE Document Generator - EXACT copy from test.py
 """
 
-import argparse
 import base64
 import json
 import os
 import re
-import subprocess
 import sys
 import tempfile
 import unicodedata
-from html.parser import HTMLParser
 from io import BytesIO
 
 from docx import Document
@@ -1746,62 +1743,7 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
     add_subsection_recursive(section_data.get("subsections", []), section_idx)
 
 
-class HTMLToWordParser(HTMLParser):
-    """Parse HTML content and apply formatting to Word document."""
 
-    def __init__(self, paragraph):
-        super().__init__()
-        self.paragraph = paragraph
-        self.format_stack = []
-        self.text_buffer = ""
-
-    def handle_starttag(self, tag, attrs):
-        # Flush any buffered text before starting new formatting
-        self._flush_text()
-
-        if tag.lower() in ["b", "strong"]:
-            self.format_stack.append("bold")
-        elif tag.lower() in ["i", "em"]:
-            self.format_stack.append("italic")
-        elif tag.lower() == "u":
-            self.format_stack.append("underline")
-
-    def handle_endtag(self, tag):
-        # Flush any buffered text before ending formatting
-        self._flush_text()
-
-        if tag.lower() in ["b", "strong"] and "bold" in self.format_stack:
-            self.format_stack.remove("bold")
-        elif tag.lower() in ["i", "em"] and "italic" in self.format_stack:
-            self.format_stack.remove("italic")
-        elif tag.lower() == "u" and "underline" in self.format_stack:
-            self.format_stack.remove("underline")
-
-    def handle_data(self, data):
-        # Buffer the text data with sanitization
-        self.text_buffer += sanitize_text(data)
-
-    def _flush_text(self):
-        """Create a run with accumulated text and current formatting."""
-        if self.text_buffer:
-            run = self.paragraph.add_run(self.text_buffer)
-            run.font.name = IEEE_CONFIG["font_name"]
-            run.font.size = IEEE_CONFIG["font_size_body"]
-
-            # Apply current formatting
-            if "bold" in self.format_stack:
-                run.bold = True
-            if "italic" in self.format_stack:
-                run.italic = True
-            if "underline" in self.format_stack:
-                run.underline = True
-
-            self.text_buffer = ""
-
-    def close(self):
-        """Ensure any remaining text is flushed when parsing is complete."""
-        self._flush_text()
-        super().close()
 
 
 def apply_equal_justification(para):
@@ -2592,8 +2534,9 @@ def build_document_model(form_data):
     return model
 
 
-def render_to_html(model):
-    """Render document model to pixel-perfect HTML matching OpenXML formatting"""
+def render_to_html_removed():
+    """HTML rendering has been removed - not needed for Word/PDF generation"""
+    raise NotImplementedError("HTML rendering removed - use Word document generation only")
     
     page_config = model["page_config"]
     
@@ -3888,119 +3831,5 @@ def generate_pdf_removed():
     raise Exception("Direct PDF generation not supported - use Word→PDF conversion only")
 
 
-def main():
-    """Main function with unified rendering system for pixel-perfect DOCX/PDF matching."""
-
-    # Parse command line arguments
-    parser = argparse.ArgumentParser(
-        description="IEEE Document Generator with unified rendering system"
-    )
-    parser.add_argument(
-        "--debug-compare",
-        action="store_true",
-        help="Generate both DOCX and PDF for visual comparison",
-    )
-    parser.add_argument(
-        "--output",
-        choices=["docx", "pdf", "html"],
-        default="docx",
-        help="Output format (default: docx)",
-    )
-
-    # Parse args if running from command line, otherwise use defaults
-    if len(sys.argv) > 1:
-        args = parser.parse_args()
-    else:
-        args = argparse.Namespace(debug_compare=False, output="docx")
-
-    try:
-        # Read JSON data from stdin
-        input_data = sys.stdin.read()
-        form_data = json.loads(input_data)
-
-        # Override output type from form data if present
-        output_type = form_data.get("output", args.output).lower()
-
-        # Build unified document model with exact OpenXML formatting metadata
-        print("🎯 Building unified document model with pixel-perfect formatting...", file=sys.stderr)
-        model = build_document_model(form_data)
-        print("✅ Document model built - single source of truth for all formats", file=sys.stderr)
-
-        if args.debug_compare:
-            # DEBUG MODE: Generate DOCX and HTML for comparison (PDF generation removed)
-            print("🔍 DEBUG MODE: Generating DOCX and HTML for comparison...", file=sys.stderr)
-
-            # Generate DOCX using original perfect generator (unchanged)
-            print("📄 Generating DOCX using original perfect generator...", file=sys.stderr)
-            docx_bytes = generate_ieee_document(form_data)
-
-            # Generate HTML using unified rendering
-            print("🌐 Generating HTML using unified rendering system...", file=sys.stderr)
-            html = render_to_html(model)
-
-            # Save files for comparison
-            import time
-            timestamp = str(int(time.time()))
-
-            with open(f"debug_compare_{timestamp}.docx", "wb") as f:
-                f.write(docx_bytes)
-            print(f"📁 DOCX saved: debug_compare_{timestamp}.docx", file=sys.stderr)
-
-            with open(f"debug_compare_{timestamp}.html", "w", encoding="utf-8") as f:
-                f.write(html)
-            print(f"📁 HTML saved: debug_compare_{timestamp}.html", file=sys.stderr)
-
-            print("🔍 Open files to verify formatting - use Word→PDF conversion for PDF output", file=sys.stderr)
-
-            # Return the requested format
-            if output_type == "pdf":
-                print("❌ Direct PDF generation removed - use Word→PDF conversion instead", file=sys.stderr)
-                raise Exception("Direct PDF generation not supported - use Word→PDF conversion")
-            elif output_type == "html":
-                doc_data = html.encode('utf-8')
-            else:
-                doc_data = docx_bytes
-
-        elif output_type == "pdf":
-            # PDF generation removed - use Word→PDF conversion only
-            print("❌ Direct PDF generation removed - use Word→PDF conversion instead", file=sys.stderr)
-            raise Exception("Direct PDF generation not supported - use Word→PDF conversion")
-
-        elif output_type == "html":
-            # Generate HTML preview using unified rendering system
-            print("🌐 Generating HTML preview using unified rendering system...", file=sys.stderr)
-            html = render_to_html(model)
-            
-            # Add preview note for live preview
-            preview_note = '''
-    <div style="background: #e8f4fd; border: 1px solid #bee5eb; padding: 12px; margin: 20px 0; font-size: 9pt; color: #0c5460; text-align: center; border-radius: 4px;">
-        📄 IEEE Live Preview - This is exactly what your PDF will look like
-    </div>
-    '''
-            html = html.replace('<body>', f'<body>{preview_note}', 1)
-            
-            doc_data = html.encode('utf-8')
-            print("✅ HTML preview generated with pixel-perfect formatting", file=sys.stderr)
-
-        else:
-            # Generate DOCX using original perfect generator (unchanged)
-            print("📄 Generating DOCX using original perfect generator...", file=sys.stderr)
-            doc_data = generate_ieee_document(form_data)
-            print("✅ DOCX generated with perfect IEEE formatting", file=sys.stderr)
-
-        # Write data to stdout
-        if output_type == "html":
-            sys.stdout.write(doc_data.decode('utf-8'))
-        else:
-            sys.stdout.buffer.write(doc_data)
-
-    except Exception as e:
-        import traceback
-
-        sys.stderr.write(f"Error: {str(e)}\n")
-        sys.stderr.write(f"Traceback: {traceback.format_exc()}\n")
-        sys.exit(1)
-
-
-if __name__ == "__main__":
-    main()
+# CLI interface removed - this module is now API-only
+# Use generate_ieee_document(form_data) function directly

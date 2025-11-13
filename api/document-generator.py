@@ -12,6 +12,35 @@ sys.path.insert(0, parent_dir)
 from ieee_generator_fixed import generate_ieee_document
 print("✅ Successfully imported ieee_generator_fixed", file=sys.stderr)
 
+# Import PDF service client for PDF service integration
+try:
+    from pdf_service_client import PDFServiceClient, PDFServiceError
+    print("✅ Successfully imported PDF service client", file=sys.stderr)
+    PDF_SERVICE_AVAILABLE = True
+except ImportError as e:
+    print(f"⚠️ PDF service client not available: {e}", file=sys.stderr)
+    PDF_SERVICE_AVAILABLE = False
+
+# Configure PDF service from environment variables
+PDF_SERVICE_URL = os.environ.get('PDF_SERVICE_URL', '')
+PDF_SERVICE_TIMEOUT = int(os.environ.get('PDF_SERVICE_TIMEOUT', '30'))
+USE_PDF_SERVICE = os.environ.get('USE_PDF_SERVICE', 'true').lower() == 'true'
+
+# Initialize PDF service client if configured
+pdf_service_client = None
+if PDF_SERVICE_AVAILABLE and USE_PDF_SERVICE and PDF_SERVICE_URL:
+    try:
+        pdf_service_client = PDFServiceClient(
+            service_url=PDF_SERVICE_URL,
+            timeout=PDF_SERVICE_TIMEOUT
+        )
+        print(f"✅ PDF service client initialized: {PDF_SERVICE_URL}", file=sys.stderr)
+    except Exception as e:
+        print(f"⚠️ Failed to initialize PDF service client: {e}", file=sys.stderr)
+        pdf_service_client = None
+else:
+    print("ℹ️ PDF service not configured, will use direct conversion fallback", file=sys.stderr)
+
 class handler(BaseHTTPRequestHandler):
     def do_OPTIONS(self):
         """Handle CORS preflight requests with better error handling"""
@@ -86,20 +115,50 @@ class handler(BaseHTTPRequestHandler):
             
             print(f"✅ DOCX generated for preview (size: {len(docx_bytes)} bytes)", file=sys.stderr)
             
-            # Step 2: Convert DOCX to PDF using direct converter
-            print("📄 Step 2: Converting DOCX to PDF for preview...", file=sys.stderr)
+            # Step 2: Convert DOCX to PDF - Try PDF service first, fallback to direct conversion
+            pdf_bytes = None
+            conversion_method = None
             
-            # Import the direct DOCX to PDF converter
-            sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-            from docx_to_pdf_converter_direct import convert_docx_to_pdf_direct
+            # Try PDF service if available
+            if pdf_service_client:
+                try:
+                    print("📄 Step 2: Converting DOCX to PDF for preview using PDF service...", file=sys.stderr)
+                    import base64
+                    response = pdf_service_client.convert_to_pdf(docx_bytes)
+                    
+                    if response.success and response.pdf_data:
+                        # Decode base64 PDF data from service
+                        pdf_bytes = base64.b64decode(response.pdf_data)
+                        conversion_method = f"pdf_service_{response.conversion_method}"
+                        print(f"✅ PDF preview generated via PDF service (size: {len(pdf_bytes)} bytes)", file=sys.stderr)
+                    else:
+                        raise Exception(f"PDF service returned unsuccessful response: {response.error}")
+                        
+                except PDFServiceError as e:
+                    print(f"⚠️ PDF service failed for preview ({e.error_code}): {e.message}", file=sys.stderr)
+                    print("🔄 Falling back to direct conversion for preview...", file=sys.stderr)
+                    # Will fall through to fallback
+                except Exception as e:
+                    print(f"⚠️ PDF service error for preview: {e}", file=sys.stderr)
+                    print("🔄 Falling back to direct conversion for preview...", file=sys.stderr)
+                    # Will fall through to fallback
             
-            # Convert DOCX to PDF
-            pdf_bytes = convert_docx_to_pdf_direct(docx_bytes)
-            
-            if not pdf_bytes or len(pdf_bytes) == 0:
-                raise Exception("DOCX→PDF conversion failed for preview")
-            
-            print(f"✅ PDF preview generated via DOCX→PDF conversion (size: {len(pdf_bytes)} bytes)", file=sys.stderr)
+            # Fallback to direct conversion if PDF service failed or not available
+            if not pdf_bytes:
+                print("📄 Step 2: Converting DOCX to PDF for preview using direct converter (fallback)...", file=sys.stderr)
+                
+                # Import the direct DOCX to PDF converter
+                sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+                from docx_to_pdf_converter_direct import convert_docx_to_pdf_direct
+                
+                # Convert DOCX to PDF
+                pdf_bytes = convert_docx_to_pdf_direct(docx_bytes)
+                conversion_method = "direct_docx2pdf_fallback"
+                
+                if not pdf_bytes or len(pdf_bytes) == 0:
+                    raise Exception("DOCX→PDF conversion failed for preview")
+                
+                print(f"✅ PDF preview generated via direct conversion fallback (size: {len(pdf_bytes)} bytes)", file=sys.stderr)
             
             # Convert to base64 for response
             import base64
@@ -117,7 +176,7 @@ class handler(BaseHTTPRequestHandler):
                 'file_type': 'application/pdf',
                 'file_size': len(pdf_bytes),
                 'message': 'PDF preview generated successfully via DOCX→PDF conversion',
-                'conversion_method': 'docx_to_pdf_conversion',
+                'conversion_method': conversion_method,
                 'generator': 'ieee_generator_fixed.py'
             }
             
@@ -127,7 +186,7 @@ class handler(BaseHTTPRequestHandler):
             self.send_error_response(500, f'Document generation failed: {str(e)}')
     
     def handle_pdf_via_docx_conversion(self, document_data):
-        """Handle PDF generation requests - Generate DOCX first, then convert to PDF"""
+        """Handle PDF generation requests - Route through PDF service with fallback to direct conversion"""
         try:
             import base64
             
@@ -142,20 +201,49 @@ class handler(BaseHTTPRequestHandler):
             
             print(f"✅ DOCX generated (size: {len(docx_bytes)} bytes)", file=sys.stderr)
             
-            # Step 2: Convert DOCX to PDF using direct converter
-            print("📄 Step 2: Converting DOCX to PDF using direct converter...", file=sys.stderr)
+            # Step 2: Convert DOCX to PDF - Try PDF service first, fallback to direct conversion
+            pdf_bytes = None
+            conversion_method = None
             
-            # Import the direct DOCX to PDF converter
-            sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-            from docx_to_pdf_converter_direct import convert_docx_to_pdf_direct
+            # Try PDF service if available
+            if pdf_service_client:
+                try:
+                    print("📄 Step 2: Converting DOCX to PDF using PDF service...", file=sys.stderr)
+                    response = pdf_service_client.convert_to_pdf(docx_bytes)
+                    
+                    if response.success and response.pdf_data:
+                        # Decode base64 PDF data from service
+                        pdf_bytes = base64.b64decode(response.pdf_data)
+                        conversion_method = f"pdf_service_{response.conversion_method}"
+                        print(f"✅ PDF generated via PDF service (size: {len(pdf_bytes)} bytes, method: {response.conversion_method})", file=sys.stderr)
+                    else:
+                        raise Exception(f"PDF service returned unsuccessful response: {response.error}")
+                        
+                except PDFServiceError as e:
+                    print(f"⚠️ PDF service failed ({e.error_code}): {e.message}", file=sys.stderr)
+                    print("🔄 Falling back to direct conversion...", file=sys.stderr)
+                    # Will fall through to fallback
+                except Exception as e:
+                    print(f"⚠️ PDF service error: {e}", file=sys.stderr)
+                    print("🔄 Falling back to direct conversion...", file=sys.stderr)
+                    # Will fall through to fallback
             
-            # Convert DOCX to PDF
-            pdf_bytes = convert_docx_to_pdf_direct(docx_bytes)
-            
-            if not pdf_bytes or len(pdf_bytes) == 0:
-                raise Exception("DOCX→PDF conversion failed - empty result")
-            
-            print(f"✅ PDF generated via DOCX→PDF conversion (size: {len(pdf_bytes)} bytes)", file=sys.stderr)
+            # Fallback to direct conversion if PDF service failed or not available
+            if not pdf_bytes:
+                print("📄 Step 2: Converting DOCX to PDF using direct converter (fallback)...", file=sys.stderr)
+                
+                # Import the direct DOCX to PDF converter
+                sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+                from docx_to_pdf_converter_direct import convert_docx_to_pdf_direct
+                
+                # Convert DOCX to PDF
+                pdf_bytes = convert_docx_to_pdf_direct(docx_bytes)
+                conversion_method = "direct_docx2pdf_fallback"
+                
+                if not pdf_bytes or len(pdf_bytes) == 0:
+                    raise Exception("DOCX→PDF conversion failed - empty result")
+                
+                print(f"✅ PDF generated via direct conversion fallback (size: {len(pdf_bytes)} bytes)", file=sys.stderr)
             
             # Convert to base64 for JSON response
             pdf_base64 = base64.b64encode(pdf_bytes).decode('utf-8')
@@ -172,7 +260,7 @@ class handler(BaseHTTPRequestHandler):
                 'file_type': 'application/pdf',
                 'file_size': len(pdf_bytes),
                 'message': 'PDF generated successfully via DOCX→PDF conversion',
-                'conversion_method': 'docx_to_pdf_conversion',
+                'conversion_method': conversion_method,
                 'requested_format': 'pdf',
                 'actual_format': 'pdf'
             }
