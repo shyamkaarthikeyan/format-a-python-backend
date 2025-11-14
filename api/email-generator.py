@@ -156,16 +156,22 @@ class handler(BaseHTTPRequestHandler):
             self.wfile.write(error_response.encode())
 
     def _send_email(self, recipient_email, document_title, document_buffer, document_data):
-        """Send email with document attachment"""
+        """Send email with document attachment using port 587 (STARTTLS)"""
         try:
-            # Get email configuration from environment
+            # Get email configuration from environment - REQUIRED
             smtp_user = os.environ.get('EMAIL_USER')
             smtp_pass = os.environ.get('EMAIL_PASS')
             
+            print(f"📧 Email config check:", file=sys.stderr)
+            print(f"   EMAIL_USER: {'SET' if smtp_user else 'NOT SET'}", file=sys.stderr)
+            print(f"   EMAIL_PASS: {'SET' if smtp_pass else 'NOT SET'}", file=sys.stderr)
+            
             if not smtp_user or not smtp_pass:
+                error_msg = 'EMAIL_USER and EMAIL_PASS must be set in Vercel environment variables'
+                print(f"❌ {error_msg}", file=sys.stderr)
                 return {
                     'success': False,
-                    'error': 'Email configuration not available'
+                    'error': error_msg
                 }
             
             # Create email message
@@ -200,21 +206,47 @@ Format-A Team
             attachment.add_header('Content-Disposition', 'attachment', filename=f'{document_title}.docx')
             msg.attach(attachment)
             
-            # Send email
-            server = smtplib.SMTP('smtp.gmail.com', 587)
+            # Send email using port 587 with STARTTLS
+            print(f"📧 Connecting to smtp.gmail.com:587...", file=sys.stderr)
+            server = smtplib.SMTP('smtp.gmail.com', 587, timeout=30)
+            
+            print(f"📧 Starting TLS...", file=sys.stderr)
             server.starttls()
+            
+            print(f"📧 Logging in as {smtp_user}...", file=sys.stderr)
             server.login(smtp_user, smtp_pass)
+            
+            print(f"📧 Sending email to {recipient_email}...", file=sys.stderr)
             server.send_message(msg)
             server.quit()
+            
+            print(f"✅ Email sent successfully to {recipient_email}", file=sys.stderr)
             
             return {
                 'success': True,
                 'message': 'Email sent successfully'
             }
             
-        except Exception as e:
-            print(f"Email sending failed: {e}", file=sys.stderr)
+        except smtplib.SMTPAuthenticationError as e:
+            error_msg = f"SMTP Authentication failed: {str(e)}"
+            print(f"❌ {error_msg}", file=sys.stderr)
+            print(f"   Check EMAIL_USER and EMAIL_PASS are correct", file=sys.stderr)
             return {
                 'success': False,
-                'error': f'Failed to send email: {str(e)}'
+                'error': error_msg
+            }
+        except smtplib.SMTPException as e:
+            error_msg = f"SMTP error: {str(e)}"
+            print(f"❌ {error_msg}", file=sys.stderr)
+            return {
+                'success': False,
+                'error': error_msg
+            }
+        except Exception as e:
+            error_msg = f"Failed to send email: {str(e)}"
+            print(f"❌ {error_msg}", file=sys.stderr)
+            print(f"   Error type: {type(e).__name__}", file=sys.stderr)
+            return {
+                'success': False,
+                'error': error_msg
             }
