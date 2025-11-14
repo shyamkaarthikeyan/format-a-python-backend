@@ -21,12 +21,22 @@ from docx.shared import Inches, Pt
 
 
 def sanitize_text(text):
-    """Sanitize text to remove invalid Unicode characters and surrogates."""
+    """Sanitize text to remove HTML tags, invalid Unicode characters and surrogates."""
     if not text:
         return ""
 
     # Convert to string if not already
     text = str(text)
+
+    # CRITICAL: Remove ALL HTML tags (including <div>, <span>, etc.)
+    text = re.sub(r'<[^>]+>', '', text)
+    
+    # Remove HTML entities
+    text = text.replace('&nbsp;', ' ')
+    text = text.replace('&lt;', '<')
+    text = text.replace('&gt;', '>')
+    text = text.replace('&amp;', '&')
+    text = text.replace('&quot;', '"')
 
     # Remove surrogate characters and other problematic Unicode
     text = text.encode("utf-8", "ignore").decode("utf-8")
@@ -36,6 +46,10 @@ def sanitize_text(text):
 
     # Remove any remaining control characters except newlines and tabs
     text = re.sub(r"[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F-\x9F]", "", text)
+    
+    # Clean up multiple spaces
+    text = re.sub(r'\s+', ' ', text)
+    text = text.strip()
 
     return text
 
