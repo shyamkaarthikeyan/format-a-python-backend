@@ -1309,7 +1309,96 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
     table_count = 0
 
     for block_idx, block in enumerate(content_blocks):
-        if block.get("type") == "text" and block.get("content"):
+        # Check for text blocks with attached images FIRST (before text-only blocks)
+        if block.get("type") == "text" and block.get("data"):
+            # Handle text blocks with attached images (React frontend pattern)
+            # FIXED: Don't require caption - use default if not provided
+            print(f"Processing text block with attached image in section {section_idx}", file=sys.stderr)
+            
+            # Handle image attached to text block
+            import base64
+
+            size = block.get("size", "medium")
+            # Get image size from config (frontend uses lowercase keys)
+            size_mapping = IEEE_CONFIG["figure_sizes"]
+            width = size_mapping.get(size, size_mapping["medium"])
+
+            # Decode base64 image data
+            try:
+                image_data = block["data"]
+
+                # Handle base64 data - remove prefix if present
+                if "," in image_data:
+                    image_data = image_data.split(",")[1]
+
+                # Decode base64 image data
+                try:
+                    image_bytes = base64.b64decode(image_data)
+                except Exception as e:
+                    print(
+                        f"ERROR: Failed to decode image data in text block: {str(e)}",
+                        file=sys.stderr,
+                    )
+                    continue
+
+                # Create image stream
+                image_stream = BytesIO(image_bytes)
+
+                # Simple image layout without complex section breaks
+                # Add simple spacing before image
+                doc.add_paragraph().paragraph_format.space_after = Pt(6)
+                
+                # Create simple image paragraph
+                para = doc.add_paragraph()
+                para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                
+                # Add the image with minimal formatting
+                run = para.add_run()
+                
+                try:
+                    # Add image with proper sizing
+                    picture = run.add_picture(image_stream, width=width)
+                    
+                    # Scale down if too tall to prevent page overflow
+                    if picture.height > IEEE_CONFIG["max_figure_height"]:
+                        scale_factor = IEEE_CONFIG["max_figure_height"] / picture.height
+                        run.clear()
+                        image_stream.seek(0)  # Reset stream position
+                        picture = run.add_picture(
+                            image_stream,
+                            width=width * scale_factor,
+                            height=IEEE_CONFIG["max_figure_height"],
+                        )
+                    
+                    print(f"Added image with simplified layout, width: {width}, height: {picture.height}", file=sys.stderr)
+                    
+                except Exception as img_error:
+                    print(f"Error adding image: {img_error}", file=sys.stderr)
+                    # Fallback: add text placeholder
+                    run.add_text(f"[Image: {block.get('caption', 'Figure')}]")
+
+                # Generate figure number and add simple caption
+                img_count = sum(
+                    1
+                    for b in content_blocks[: block_idx + 1]
+                    if b.get("type") == "image"
+                )
+                
+                # Add figure caption with simple formatting (use default if no caption provided)
+                caption_text = block.get('caption', '').strip() or f"Figure {img_count}"
+                caption_para = doc.add_paragraph()
+                caption_run = caption_para.add_run(f"FIG. {section_idx}.{img_count}: {sanitize_text(caption_text).upper()}")
+                caption_run.font.name = "Times New Roman"
+                caption_run.font.size = Pt(9)
+                caption_run.bold = True
+                caption_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                
+                # Add simple spacing after caption
+                doc.add_paragraph().paragraph_format.space_after = Pt(12)
+            except Exception as e:
+                print(f"Error processing image in text block: {e}", file=sys.stderr)
+        
+        elif block.get("type") == "text" and block.get("content"):
             space_before = (
                 IEEE_CONFIG["line_spacing"]
                 if is_first_section and block_idx == 0
@@ -1359,102 +1448,9 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
             else:
                 print(f"❌ Failed to create table {table_count} in section {section_idx}", file=sys.stderr)
 
-        elif block.get("type") == "text" and block.get("data") and block.get("caption"):
-            # Handle text blocks with attached images (React frontend pattern)
-                # Handle image attached to text block
-                import base64
-
-                size = block.get("size", "medium")
-                # Map frontend size names to backend size names
-                size_mapping = {
-                    "very-small": "Very Small",
-                    "small": "Small",
-                    "medium": "Medium",
-                    "large": "Large",
-                }
-                mapped_size = size_mapping.get(size, "Medium")
-                width = IEEE_CONFIG["figure_sizes"].get(
-                    mapped_size, IEEE_CONFIG["figure_sizes"]["Medium"]
-                )
-
-                # Decode base64 image data
-                try:
-                    image_data = block["data"]
-
-                    # Handle base64 data - remove prefix if present
-                    if "," in image_data:
-                        image_data = image_data.split(",")[1]
-
-                    # Decode base64 image data
-                    try:
-                        image_bytes = base64.b64decode(image_data)
-                    except Exception as e:
-                        print(
-                            f"ERROR: Failed to decode image data in text block: {str(e)}",
-                            file=sys.stderr,
-                        )
-                        continue
-
-                    # Create image stream
-                    image_stream = BytesIO(image_bytes)
-
-                    # Simple image layout without complex section breaks
-                    # Add simple spacing before image
-                    doc.add_paragraph().paragraph_format.space_after = Pt(6)
-                    
-                    # Create simple image paragraph
-                    para = doc.add_paragraph()
-                    para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                    
-                    # Add the image with minimal formatting
-                    run = para.add_run()
-                    
-                    try:
-                        # Add image with proper sizing
-                        picture = run.add_picture(image_stream, width=width)
-                        
-                        # Scale down if too tall to prevent page overflow
-                        if picture.height > IEEE_CONFIG["max_figure_height"]:
-                            scale_factor = IEEE_CONFIG["max_figure_height"] / picture.height
-                            run.clear()
-                            image_stream.seek(0)  # Reset stream position
-                            picture = run.add_picture(
-                                image_stream,
-                                width=width * scale_factor,
-                                height=IEEE_CONFIG["max_figure_height"],
-                            )
-                        
-                        print(f"Added image with simplified layout, width: {width}, height: {picture.height}", file=sys.stderr)
-                        
-                    except Exception as img_error:
-                        print(f"Error adding image: {img_error}", file=sys.stderr)
-                        # Fallback: add text placeholder
-                        run.add_text(f"[Image: {block.get('caption', 'Figure')}]")
-
-                    # Generate figure number and add simple caption
-                    img_count = sum(
-                        1
-                        for b in content_blocks[: block_idx + 1]
-                        if b.get("type") == "image"
-                    )
-                    
-                    # Add figure caption with simple formatting
-                    caption_para = doc.add_paragraph()
-                    caption_run = caption_para.add_run(f"FIG. {section_idx}.{img_count}: {sanitize_text(block['caption']).upper()}")
-                    caption_run.font.name = "Times New Roman"
-                    caption_run.font.size = Pt(9)
-                    caption_run.bold = True
-                    caption_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                    
-                    # Add simple spacing after caption
-                    doc.add_paragraph().paragraph_format.space_after = Pt(12)
-                except Exception as e:
-                    print(f"Error processing image in text block: {e}", file=sys.stderr)
-
-        elif (
-            block.get("type") == "image" and block.get("data") and block.get("caption")
-        ):
+        elif block.get("type") == "image" and block.get("data"):
             # Handle image blocks - CLEAN & SIMPLE approach
+            # FIXED: Don't require caption - use default if not provided
             img_count = sum(
                 1 for b in content_blocks[: block_idx + 1] if b.get("type") == "image"
             )
@@ -1472,7 +1468,8 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
             width_inches = width / Inches(1)
             print(f"📏 Image size '{size}' = {width_inches:.2f}\"", file=sys.stderr)
             
-            caption_text = sanitize_text(block['caption'])
+            # Use default caption if not provided
+            caption_text = sanitize_text(block.get('caption', '').strip() or f"Figure {img_count}")
             figure_number = f"FIG. {section_idx}.{img_count}"
 
             try:
