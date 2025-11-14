@@ -65,6 +65,7 @@ class handler(BaseHTTPRequestHandler):
             # Extract email and document data
             recipient_email = email_data.get('email')
             document_data = email_data.get('documentData')
+            file_data_base64 = email_data.get('fileData')  # Pre-generated file (base64)
             
             # Validate required fields
             if not recipient_email:
@@ -77,45 +78,60 @@ class handler(BaseHTTPRequestHandler):
                 self.wfile.write(error_response.encode())
                 return
             
-            if not document_data:
-                self.end_headers()
-                error_response = json.dumps({
-                    'success': False,
-                    'error': 'Missing document data',
-                    'message': 'Document data is required for email generation'
-                })
-                self.wfile.write(error_response.encode())
-                return
-            
-            if not document_data.get('title'):
-                self.end_headers()
-                error_response = json.dumps({
-                    'success': False,
-                    'error': 'Missing document title',
-                    'message': 'Document title is required'
-                })
-                self.wfile.write(error_response.encode())
-                return
-            
-            # Generate the document
-            print(f"Generating document for email to {recipient_email}...", file=sys.stderr)
-            docx_result = generate_ieee_document(document_data)
-            
-            # Handle both bytes and BytesIO objects
-            if isinstance(docx_result, bytes):
-                docx_buffer = BytesIO(docx_result)
+            # Check if we have pre-generated file data
+            if file_data_base64:
+                # Use the already-generated file (same as downloaded)
+                print(f"Using pre-generated document for email to {recipient_email}...", file=sys.stderr)
+                
+                # Decode base64 to bytes
+                import base64
+                docx_bytes = base64.b64decode(file_data_base64)
+                docx_buffer = BytesIO(docx_bytes)
+                
+                document_title = document_data.get('title', 'IEEE Paper') if document_data else 'IEEE Paper'
+                
             else:
-                docx_buffer = docx_result
+                # Generate fresh document (fallback)
+                if not document_data:
+                    self.end_headers()
+                    error_response = json.dumps({
+                        'success': False,
+                        'error': 'Missing document data',
+                        'message': 'Document data or file data is required'
+                    })
+                    self.wfile.write(error_response.encode())
+                    return
+                
+                if not document_data.get('title'):
+                    self.end_headers()
+                    error_response = json.dumps({
+                        'success': False,
+                        'error': 'Missing document title',
+                        'message': 'Document title is required'
+                    })
+                    self.wfile.write(error_response.encode())
+                    return
+                
+                print(f"Generating fresh document for email to {recipient_email}...", file=sys.stderr)
+                docx_result = generate_ieee_document(document_data)
+                
+                # Handle both bytes and BytesIO objects
+                if isinstance(docx_result, bytes):
+                    docx_buffer = BytesIO(docx_result)
+                else:
+                    docx_buffer = docx_result
+                
+                document_title = document_data.get('title', 'IEEE Paper')
             
             if not docx_buffer or docx_buffer.getvalue() == b'':
-                raise Exception("Generated document is empty")
+                raise Exception("Document is empty")
             
             # Send email
             email_result = self._send_email(
                 recipient_email=recipient_email,
-                document_title=document_data.get('title', 'IEEE Paper'),
+                document_title=document_title,
                 document_buffer=docx_buffer,
-                document_data=document_data
+                document_data=document_data or {}
             )
             
             if email_result['success']:
