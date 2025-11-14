@@ -199,20 +199,20 @@ IEEE_CONFIG = {
     "spacing_keywords_after": 240,  # 12pt after keywords
     "spacing_section_before": 240,  # 12pt before section headings
     "spacing_section_after": 0,  # 0pt after section headings
-    # Figure specifications - 5 SIZE OPTIONS (all fit within 2-column layout with minimal margins)
-    # Column width is 3.3125", with 0.05" margins on each side = 3.2125" usable space
+    # Figure specifications - 5 SIZE OPTIONS (with line height fix, no compression)
+    # Column width is 3.3125" - line height fix allows full-size images
     "figure_max_width_twips": 4770,  # Max 3.3125" width (column width)
     "figure_spacing": 120,  # 6pt before/after figures
     "figure_sizes": {
-        "extra-small": Inches(1.8),   # 1.8" - Small but visible (was 1.0")
-        "small": Inches(2.2),          # 2.2" - Clear and readable (was 1.5")
-        "medium": Inches(2.6),         # 2.6" - Balanced, fills column nicely (was 2.2")
-        "large": Inches(2.9),          # 2.9" - Large and prominent (was 2.7")
-        "extra-large": Inches(3.1),    # 3.1" - Maximum size, fills column (was 3.0")
+        "extra-small": Inches(1.5),   # 1.5" - Small but clear
+        "small": Inches(2.0),          # 2.0" - Good visibility
+        "medium": Inches(2.4),         # 2.4" - Balanced size
+        "large": Inches(2.8),          # 2.8" - Large and prominent
+        "extra-large": Inches(3.0),    # 3.0" - Maximum size for column
     },
-    "max_figure_height": Inches(3.5),  # Max figure height (reduced for 2-column fit)
-    "min_figure_width": Inches(1.8),   # Minimum width for visibility (increased from 1.0")
-    "max_figure_width": Inches(3.1),   # Maximum width (fits in 3.3125" column with 0.1" total margins)
+    "max_figure_height": Inches(4.0),  # Max figure height
+    "min_figure_width": Inches(1.5),   # Minimum width for visibility
+    "max_figure_width": Inches(3.0),   # Maximum width (fits in 3.3" column)
     # Table specifications - 5 SIZE OPTIONS (all fit within 2-column layout)
     "table_sizes": {
         "extra-small": Inches(1.5),    # 1.5" - Compact table
@@ -1498,35 +1498,47 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
                 
                 print(f"📐 Dynamic spacing: {space_before.pt}pt before, {space_after.pt}pt after", file=sys.stderr)
 
-                # Add spacing before image (dynamic based on size)
+                # Add spacing before image
                 spacing_para = doc.add_paragraph()
                 spacing_para.paragraph_format.space_before = space_before
                 spacing_para.paragraph_format.space_after = Pt(0)
-                spacing_para.paragraph_format.keep_with_next = True  # Keep with image
 
-                # Add image paragraph
+                # Add image paragraph with properties to prevent compression
                 img_para = doc.add_paragraph()
                 img_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
                 img_para.paragraph_format.space_before = Pt(0)
                 img_para.paragraph_format.space_after = Pt(6)
-                img_para.paragraph_format.keep_with_next = True  # Keep with caption
+                img_para.paragraph_format.keep_with_next = True
                 img_para.paragraph_format.keep_together = True
+                
+                # CRITICAL: Set paragraph to not compress in columns
+                pPr = img_para._element.get_or_add_pPr()
+                
+                # Disable text compression
+                suppressAutoHyphens = OxmlElement("w:suppressAutoHyphens")
+                suppressAutoHyphens.set(qn("w:val"), "1")
+                pPr.append(suppressAutoHyphens)
+                
+                # Prevent line height compression
+                contextualSpacing = OxmlElement("w:contextualSpacing")
+                contextualSpacing.set(qn("w:val"), "0")
+                pPr.append(contextualSpacing)
                 
                 # Add image
                 run = img_para.add_run()
                 picture = run.add_picture(image_stream, width=width)
                 
-                # Remove effectExtent margins - they cause clipping
-                inline = picture._inline
-                effectExtent = inline.find('.//{http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing}effectExtent')
-                if effectExtent is not None:
-                    # Set to zero - no margins needed
-                    effectExtent.set('l', '0')
-                    effectExtent.set('t', '0')
-                    effectExtent.set('r', '0')
-                    effectExtent.set('b', '0')
+                # CRITICAL FIX: Set line spacing to match image height
+                # Inline images are constrained by paragraph line height
+                image_height_pt = picture.height / 12700  # EMUs to points
                 
-                print(f"✅ Image added: {picture.width/914400:.2f}\" x {picture.height/914400:.2f}\"", file=sys.stderr)
+                # Set exact line spacing to image height
+                spacing = OxmlElement("w:spacing")
+                spacing.set(qn("w:line"), str(int(image_height_pt * 20)))  # Points to twips
+                spacing.set(qn("w:lineRule"), "exact")
+                pPr.append(spacing)
+                
+                print(f"✅ Image added: {picture.width/914400:.2f}\" x {picture.height/914400:.2f}\" (line height: {image_height_pt:.1f}pt)", file=sys.stderr)
                 
                 # Scale if too tall
                 max_height = Inches(4.0)
