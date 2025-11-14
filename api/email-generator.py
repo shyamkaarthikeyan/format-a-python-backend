@@ -99,7 +99,13 @@ class handler(BaseHTTPRequestHandler):
             
             # Generate the document
             print(f"Generating document for email to {recipient_email}...", file=sys.stderr)
-            docx_buffer = generate_ieee_document(document_data)
+            docx_result = generate_ieee_document(document_data)
+            
+            # Handle both bytes and BytesIO objects
+            if isinstance(docx_result, bytes):
+                docx_buffer = BytesIO(docx_result)
+            else:
+                docx_buffer = docx_result
             
             if not docx_buffer or docx_buffer.getvalue() == b'':
                 raise Exception("Generated document is empty")
