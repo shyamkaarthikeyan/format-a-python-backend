@@ -674,21 +674,28 @@ def add_keywords(doc, keywords):
 
 
 def apply_ieee_latex_formatting(
-    para, spacing_before=0, spacing_after=0, line_spacing=240
+    para, spacing_before=0, spacing_after=0, line_spacing=240, preserve_alignment=False
 ):
     """Apply PERFECT IEEE LaTeX PDF formatting with enhanced justification controls."""
     pPr = para._element.get_or_add_pPr()
 
-    # Clear existing formatting first
-    for elem in pPr.xpath(
-        "./w:spacing | ./w:jc | ./w:adjustRightInd | ./w:snapToGrid | ./w:textAlignment | ./w:suppressAutoHyphens"
-    ):
-        pPr.remove(elem)
+    # Clear existing formatting first (but preserve alignment if requested)
+    if preserve_alignment:
+        for elem in pPr.xpath(
+            "./w:spacing | ./w:adjustRightInd | ./w:snapToGrid | ./w:textAlignment | ./w:suppressAutoHyphens"
+        ):
+            pPr.remove(elem)
+    else:
+        for elem in pPr.xpath(
+            "./w:spacing | ./w:jc | ./w:adjustRightInd | ./w:snapToGrid | ./w:textAlignment | ./w:suppressAutoHyphens"
+        ):
+            pPr.remove(elem)
 
-    # 1. FULL JUSTIFICATION = CONSISTENT WITH PDF OUTPUT
-    jc = OxmlElement("w:jc")
-    jc.set(qn("w:val"), "both")  # Use 'both' for consistent Word/PDF justification
-    pPr.append(jc)
+    # 1. FULL JUSTIFICATION = CONSISTENT WITH PDF OUTPUT (only if not preserving alignment)
+    if not preserve_alignment:
+        jc = OxmlElement("w:jc")
+        jc.set(qn("w:val"), "both")  # Use 'both' for consistent Word/PDF justification
+        pPr.append(jc)
 
     # 2. ENHANCED TEXT DISTRIBUTION for better spacing
     textAlignment = OxmlElement("w:textAlignment")
@@ -850,13 +857,17 @@ def parse_html_to_word(doc, html_content):
                 # Create paragraph if needed
                 if not self.current_para:
                     self.current_para = self.doc.add_paragraph()
+                    has_custom_alignment = False
                     if self.alignment:
                         self.current_para.alignment = self.alignment
+                        has_custom_alignment = True
                     else:
                         # Default to justify for IEEE format
                         self.current_para.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+                    # Apply IEEE formatting, preserving alignment if custom alignment was set
                     apply_ieee_latex_formatting(
-                        self.current_para, spacing_before=0, spacing_after=0, line_spacing=240
+                        self.current_para, spacing_before=0, spacing_after=0, line_spacing=240,
+                        preserve_alignment=has_custom_alignment
                     )
                     self.paragraphs_created.append(self.current_para)
                 
