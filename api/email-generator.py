@@ -268,6 +268,8 @@ Format-A Team
             error_msg = f"Failed to send email: {str(e)}"
             print(f"❌ {error_msg}", file=sys.stderr)
             print(f"   Error type: {type(e).__name__}", file=sys.stderr)
+            import traceback
+            traceback.print_exc(file=sys.stderr)
             return {
                 'success': False,
                 'error': error_msg
