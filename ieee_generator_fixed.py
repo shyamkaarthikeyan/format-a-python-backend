@@ -1868,10 +1868,11 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
 
     def add_nested_subsection(all_subsections, parent_id, parent_number, level):
         """Add nested subsections recursively."""
+        # Find direct children of this parent (any subsection with matching parentId)
         child_subsections = [
             s
             for s in all_subsections
-            if s.get("parentId") == parent_id and s.get("level", 1) == level
+            if s.get("parentId") == parent_id
         ]
 
         for child_idx, child_sub in enumerate(child_subsections, 1):
