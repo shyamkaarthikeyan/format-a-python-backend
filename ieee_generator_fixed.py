@@ -28,7 +28,14 @@ def sanitize_text(text):
     # Convert to string if not already
     text = str(text)
 
-    # CRITICAL: Remove ALL HTML tags (including <div>, <span>, etc.)
+    # CRITICAL FIX: Convert <br> and <br/> tags to newlines BEFORE removing other HTML tags
+    text = re.sub(r'<br\s*/?>', '\n', text, flags=re.IGNORECASE)
+    text = re.sub(r'<div>', '\n', text, flags=re.IGNORECASE)
+    text = re.sub(r'</div>', '', text, flags=re.IGNORECASE)
+    text = re.sub(r'<p>', '\n', text, flags=re.IGNORECASE)
+    text = re.sub(r'</p>', '', text, flags=re.IGNORECASE)
+    
+    # CRITICAL: Remove ALL other HTML tags (including <span>, etc.)
     text = re.sub(r'<[^>]+>', '', text)
     
     # Remove HTML entities
@@ -47,8 +54,10 @@ def sanitize_text(text):
     # Remove any remaining control characters except newlines and tabs
     text = re.sub(r"[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F-\x9F]", "", text)
     
-    # Clean up multiple spaces
-    text = re.sub(r'\s+', ' ', text)
+    # Clean up multiple spaces on same line, but preserve newlines
+    text = re.sub(r'[ \t]+', ' ', text)
+    # Clean up multiple consecutive newlines (max 2 newlines = 1 blank line)
+    text = re.sub(r'\n\s*\n\s*\n+', '\n\n', text)
     text = text.strip()
 
     return text
@@ -753,12 +762,24 @@ def setup_two_column_layout(doc):
 
 def add_ieee_body_paragraph(doc, text):
     """Add a body paragraph with EXACT IEEE LaTeX PDF formatting via OpenXML."""
+    sanitized_text = sanitize_text(text)
+    
+    # Split text by newlines to handle line breaks properly
+    lines = sanitized_text.split('\n')
+    
+    # Create first paragraph
     para = doc.add_paragraph()
-    run = para.add_run(sanitize_text(text))
-
-    # Font: Times New Roman 10pt
-    run.font.name = "Times New Roman"
-    run.font.size = Pt(10)
+    
+    # Add each line with proper line breaks
+    for i, line in enumerate(lines):
+        if i > 0:
+            # Add a line break between lines
+            para.add_run().add_break()
+        
+        # Add the line text
+        run = para.add_run(line)
+        run.font.name = "Times New Roman"
+        run.font.size = Pt(10)
 
     # FIXED: Apply full IEEE justification using the dedicated function
     apply_ieee_latex_formatting(
