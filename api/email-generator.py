@@ -82,13 +82,20 @@ class handler(BaseHTTPRequestHandler):
             if file_data_base64:
                 # Use the already-generated file (same as downloaded)
                 print(f"Using pre-generated document for email to {recipient_email}...", file=sys.stderr)
+                print(f"   File data length: {len(file_data_base64)} characters", file=sys.stderr)
                 
                 # Decode base64 to bytes
                 import base64
-                docx_bytes = base64.b64decode(file_data_base64)
-                docx_buffer = BytesIO(docx_bytes)
+                try:
+                    docx_bytes = base64.b64decode(file_data_base64)
+                    docx_buffer = BytesIO(docx_bytes)
+                    print(f"   Decoded to {len(docx_bytes)} bytes", file=sys.stderr)
+                except Exception as decode_error:
+                    print(f"   ❌ Failed to decode base64: {decode_error}", file=sys.stderr)
+                    raise Exception(f"Invalid base64 file data: {decode_error}")
                 
                 document_title = document_data.get('title', 'IEEE Paper') if document_data else 'IEEE Paper'
+                print(f"   Document title: {document_title}", file=sys.stderr)
                 
             else:
                 # Generate fresh document (fallback)
@@ -123,8 +130,20 @@ class handler(BaseHTTPRequestHandler):
                 
                 document_title = document_data.get('title', 'IEEE Paper')
             
-            if not docx_buffer or docx_buffer.getvalue() == b'':
-                raise Exception("Document is empty")
+            # Validate docx_buffer
+            if not docx_buffer:
+                raise Exception("Document buffer is None")
+            
+            if not isinstance(docx_buffer, BytesIO):
+                raise Exception(f"Document buffer is wrong type: {type(docx_buffer).__name__}, expected BytesIO")
+            
+            try:
+                buffer_content = docx_buffer.getvalue()
+                if buffer_content == b'':
+                    raise Exception("Document is empty")
+                print(f"   Document buffer size: {len(buffer_content)} bytes", file=sys.stderr)
+            except AttributeError as e:
+                raise Exception(f"Document buffer has no getvalue() method. Type: {type(docx_buffer).__name__}")
             
             # Send email
             email_result = self._send_email(
