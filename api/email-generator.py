@@ -146,11 +146,16 @@ class handler(BaseHTTPRequestHandler):
                 raise Exception(f"Document buffer has no getvalue() method. Type: {type(docx_buffer).__name__}")
             
             # Send email
+            print(f"📧 Calling _send_email with:", file=sys.stderr)
+            print(f"   recipient: {recipient_email}", file=sys.stderr)
+            print(f"   title: {document_title}", file=sys.stderr)
+            print(f"   document_data type: {type(document_data).__name__}", file=sys.stderr)
+            
             email_result = self._send_email(
                 recipient_email=recipient_email,
                 document_title=document_title,
                 document_buffer=docx_buffer,
-                document_data=document_data or {}
+                document_data=document_data if isinstance(document_data, dict) else {}
             )
             
             if email_result['success']:
@@ -199,6 +204,11 @@ class handler(BaseHTTPRequestHandler):
     def _send_email(self, recipient_email, document_title, document_buffer, document_data):
         """Send email with document attachment using port 587 (STARTTLS)"""
         try:
+            # Validate document_data type
+            if not isinstance(document_data, dict):
+                print(f"⚠️ document_data is not a dict, it's {type(document_data).__name__}", file=sys.stderr)
+                document_data = {}  # Use empty dict as fallback
+            
             # Get email configuration from environment - REQUIRED
             smtp_user = os.environ.get('EMAIL_USER')
             smtp_pass = os.environ.get('EMAIL_PASS')
