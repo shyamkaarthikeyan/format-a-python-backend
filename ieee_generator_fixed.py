@@ -19,6 +19,15 @@ from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Inches, Pt
 
+# Import LaTeX equation converter
+try:
+    from latex_equation_converter import insert_latex_equation, format_latex_for_display
+    LATEX_CONVERTER_AVAILABLE = True
+    print("✅ LaTeX equation converter loaded successfully", file=sys.stderr)
+except ImportError as e:
+    LATEX_CONVERTER_AVAILABLE = False
+    print(f"⚠️ LaTeX equation converter not available: {e}", file=sys.stderr)
+
 
 def sanitize_text(text):
     """Sanitize text to remove HTML tags, invalid Unicode characters and surrogates."""
@@ -1728,9 +1737,9 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
                 para.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
         elif block.get("type") == "equation" and block.get("content"):
-            # Handle equation blocks
-            equation_content = sanitize_text(block.get("content", ""))
-            equation_number = block.get("equationNumber", "")
+            # Handle equation blocks with LaTeX rendering
+            equation_content = block.get("content", "")
+            equation_number = block.get("equationNumber")
             
             # Add equation paragraph with center alignment
             para = doc.add_paragraph()
@@ -1738,15 +1747,36 @@ def add_section(doc, section_data, section_idx, is_first_section=False):
             para.paragraph_format.space_before = Pt(12)
             para.paragraph_format.space_after = Pt(12)
             
-            # Add equation content with number if provided
-            if equation_number:
-                run = para.add_run(f"({equation_number}) {equation_content}")
+            # Try to use LaTeX converter if available
+            if LATEX_CONVERTER_AVAILABLE and equation_content:
+                try:
+                    print(f"🔢 Converting LaTeX equation: {equation_content[:50]}...", file=sys.stderr)
+                    success = insert_latex_equation(para, equation_content, equation_number)
+                    if success:
+                        print(f"✅ LaTeX equation converted successfully", file=sys.stderr)
+                    else:
+                        print(f"⚠️ LaTeX conversion failed, using fallback", file=sys.stderr)
+                except Exception as e:
+                    print(f"❌ Error converting LaTeX: {e}, using fallback", file=sys.stderr)
+                    # Fallback to formatted display
+                    formatted_eq = format_latex_for_display(equation_content)
+                    if equation_number:
+                        run = para.add_run(f"{formatted_eq}  ({equation_number})")
+                    else:
+                        run = para.add_run(formatted_eq)
+                    run.font.name = "Times New Roman"
+                    run.font.size = Pt(11)
+                    run.italic = True
             else:
-                run = para.add_run(equation_content)
-            
-            run.font.name = "Times New Roman"
-            run.font.size = Pt(10)
-            run.italic = True  # IEEE equations are typically italic
+                # Fallback: sanitize and display as text
+                equation_content = sanitize_text(equation_content)
+                if equation_number:
+                    run = para.add_run(f"{equation_content}  ({equation_number})")
+                else:
+                    run = para.add_run(equation_content)
+                run.font.name = "Times New Roman"
+                run.font.size = Pt(10)
+                run.italic = True
 
         elif block.get("type") == "subsection":
             # Handle subsection blocks

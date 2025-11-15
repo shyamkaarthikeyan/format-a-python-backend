@@ -3,6 +3,7 @@ flask==2.3.3
 
 # Document processing
 python-docx==0.8.11
+latex2mathml==3.77.0
 
 # PDF generation with 2-column layout
 reportlab==4.0.4
