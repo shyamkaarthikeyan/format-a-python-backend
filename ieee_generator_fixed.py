@@ -760,33 +760,165 @@ def setup_two_column_layout(doc):
     sectPr.append(cols)
 
 
-def add_ieee_body_paragraph(doc, text):
-    """Add a body paragraph with EXACT IEEE LaTeX PDF formatting via OpenXML."""
-    sanitized_text = sanitize_text(text)
+def parse_html_to_word(doc, html_content):
+    """Parse HTML content and convert to Word document with proper formatting."""
+    from html.parser import HTMLParser
     
-    # Split text by newlines to handle line breaks properly
-    lines = sanitized_text.split('\n')
+    class WordHTMLParser(HTMLParser):
+        def __init__(self, doc):
+            super().__init__()
+            self.doc = doc
+            self.current_para = None
+            self.current_run = None
+            self.format_stack = []  # Track nested formatting
+            self.in_list = None  # Track if we're in a list (ul/ol)
+            self.list_items = []
+            self.alignment = None  # Track text alignment
+            self.paragraphs_created = []
+            
+        def handle_starttag(self, tag, attrs):
+            attrs_dict = dict(attrs)
+            
+            if tag in ['ul', 'ol']:
+                # Finish current paragraph before starting list
+                self.current_para = None
+                self.in_list = tag
+                self.list_items = []
+            elif tag == 'li':
+                # List item - will be processed in handle_data
+                pass
+            elif tag in ['div', 'p']:
+                # Finish current paragraph and start new one
+                self.current_para = None
+                # Check for alignment in style attribute
+                style = attrs_dict.get('style', '')
+                if 'text-align' in style:
+                    if 'center' in style:
+                        self.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                    elif 'right' in style:
+                        self.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+                    elif 'justify' in style:
+                        self.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+                    else:
+                        self.alignment = WD_ALIGN_PARAGRAPH.LEFT
+            elif tag == 'br':
+                # Line break
+                if self.current_para:
+                    # Add a line break in current paragraph
+                    self.current_para.add_run().add_break()
+            elif tag in ['b', 'strong', 'i', 'em', 'u']:
+                # Track formatting
+                self.format_stack.append(tag)
+                
+        def handle_endtag(self, tag):
+            if tag in ['ul', 'ol']:
+                # End list - add all items
+                if self.list_items:
+                    for item_text in self.list_items:
+                        para = self.doc.add_paragraph(item_text, style='List Bullet' if self.in_list == 'ul' else 'List Number')
+                        para.paragraph_format.left_indent = Inches(0.25)
+                        para.paragraph_format.space_before = Pt(3)
+                        para.paragraph_format.space_after = Pt(3)
+                        # Apply IEEE font
+                        for run in para.runs:
+                            run.font.name = "Times New Roman"
+                            run.font.size = Pt(10)
+                        self.paragraphs_created.append(para)
+                self.in_list = None
+                self.list_items = []
+                self.current_para = None
+            elif tag == 'li':
+                pass
+            elif tag in ['div', 'p']:
+                # Finish current paragraph
+                self.current_para = None
+                self.alignment = None
+            elif tag in ['b', 'strong', 'i', 'em', 'u']:
+                # Remove from format stack
+                if tag in self.format_stack:
+                    self.format_stack.remove(tag)
+                    
+        def handle_data(self, data):
+            # Don't strip - preserve spaces
+            if not data or data.isspace():
+                return
+                
+            if self.in_list:
+                # Add to list items
+                self.list_items.append(data.strip())
+            else:
+                # Create paragraph if needed
+                if not self.current_para:
+                    self.current_para = self.doc.add_paragraph()
+                    if self.alignment:
+                        self.current_para.alignment = self.alignment
+                    else:
+                        # Default to justify for IEEE format
+                        self.current_para.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+                    apply_ieee_latex_formatting(
+                        self.current_para, spacing_before=0, spacing_after=0, line_spacing=240
+                    )
+                    self.paragraphs_created.append(self.current_para)
+                
+                # Add run with formatting
+                run = self.current_para.add_run(data)
+                run.font.name = "Times New Roman"
+                run.font.size = Pt(10)
+                
+                # Apply formatting from stack
+                if 'b' in self.format_stack or 'strong' in self.format_stack:
+                    run.bold = True
+                if 'i' in self.format_stack or 'em' in self.format_stack:
+                    run.italic = True
+                if 'u' in self.format_stack:
+                    run.underline = True
+                    
+                self.current_run = run
     
-    # Create first paragraph
-    para = doc.add_paragraph()
+    # Parse the HTML
+    parser = WordHTMLParser(doc)
+    parser.feed(html_content)
     
-    # Add each line with proper line breaks
-    for i, line in enumerate(lines):
-        if i > 0:
-            # Add a line break between lines
-            para.add_run().add_break()
+    # Return the last paragraph created (or None if no paragraphs)
+    return parser.paragraphs_created[-1] if parser.paragraphs_created else None
+
+
+def add_ieee_body_paragraph(doc, html_content):
+    """Add a body paragraph with HTML formatting support and EXACT IEEE LaTeX PDF formatting."""
+    if not html_content:
+        return doc.add_paragraph()
+    
+    # Check if content has HTML tags
+    if '<' in html_content and '>' in html_content:
+        # Parse HTML and apply formatting
+        return parse_html_to_word(doc, html_content)
+    else:
+        # Plain text - use simple approach
+        sanitized_text = sanitize_text(html_content)
         
-        # Add the line text
-        run = para.add_run(line)
-        run.font.name = "Times New Roman"
-        run.font.size = Pt(10)
+        # Split text by newlines to handle line breaks properly
+        lines = sanitized_text.split('\n')
+        
+        # Create first paragraph
+        para = doc.add_paragraph()
+        
+        # Add each line with proper line breaks
+        for i, line in enumerate(lines):
+            if i > 0:
+                # Add a line break between lines
+                para.add_run().add_break()
+            
+            # Add the line text
+            run = para.add_run(line)
+            run.font.name = "Times New Roman"
+            run.font.size = Pt(10)
 
-    # FIXED: Apply full IEEE justification using the dedicated function
-    apply_ieee_latex_formatting(
-        para, spacing_before=0, spacing_after=0, line_spacing=240
-    )
+        # FIXED: Apply full IEEE justification using the dedicated function
+        apply_ieee_latex_formatting(
+            para, spacing_before=0, spacing_after=0, line_spacing=240
+        )
 
-    return para
+        return para
 
 
 def add_ieee_table(doc, table_data, section_idx, table_count):
