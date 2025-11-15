@@ -92,7 +92,7 @@ class handler(BaseHTTPRequestHandler):
                     print(f"   ❌ Failed to decode base64: {decode_error}", file=sys.stderr)
                     raise Exception(f"Invalid base64 file data: {decode_error}")
                 
-                document_title = document_data.get('title', 'IEEE Paper') if document_data else 'IEEE Paper'
+                document_title = document_data.get('title', 'IEEE Paper') if isinstance(document_data, dict) else 'IEEE Paper'
                 print(f"   Document title: {document_title}", file=sys.stderr)
                 
             else:
@@ -110,7 +110,7 @@ class handler(BaseHTTPRequestHandler):
                     self.wfile.write(error_response.encode())
                     return
                 
-                if not document_data.get('title'):
+                if not (isinstance(document_data, dict) and document_data.get('title')):
                     self.send_response(400)
                     self.send_header('Content-Type', 'application/json')
                     self.send_header('Access-Control-Allow-Origin', 'https://format-a.vercel.app')
@@ -132,7 +132,7 @@ class handler(BaseHTTPRequestHandler):
                 else:
                     docx_buffer = docx_result
                 
-                document_title = document_data.get('title', 'IEEE Paper')
+                document_title = document_data.get('title', 'IEEE Paper') if isinstance(document_data, dict) else 'IEEE Paper'
             
             # Validate docx_buffer
             if not docx_buffer:
@@ -211,9 +211,9 @@ class handler(BaseHTTPRequestHandler):
     def _send_email(self, recipient_email, document_title, document_buffer, document_data):
         """Send email with document attachment using port 587 (STARTTLS)"""
         try:
-            # Validate document_data type
+            # Validate document_data type - MUST be dict
             if not isinstance(document_data, dict):
-                print(f"⚠️ document_data is not a dict, it's {type(document_data).__name__}", file=sys.stderr)
+                print(f"⚠️ document_data is not a dict, it's {type(document_data).__name__}: {document_data}", file=sys.stderr)
                 document_data = {}  # Use empty dict as fallback
             
             # Get email configuration from environment - REQUIRED
@@ -238,9 +238,9 @@ class handler(BaseHTTPRequestHandler):
             msg['To'] = recipient_email
             msg['Subject'] = f'IEEE Paper: {document_title}'
             
-            # Email body
-            authors = document_data.get('authors', [])
-            author_names = [author.get('name', '') for author in authors if author.get('name')]
+            # Email body - safely extract authors
+            authors = document_data.get('authors', []) if isinstance(document_data, dict) else []
+            author_names = [author.get('name', '') for author in authors if isinstance(author, dict) and author.get('name')]
             authors_text = ', '.join(author_names) if author_names else 'Unknown'
             
             body = f"""
